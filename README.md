@@ -54,4 +54,38 @@ npx nodemon server.js
 - Vérifiez le port dans `server.js` si la page ne s'affiche pas.
 
 **Testé**
-- Vous pouvez tester le jeux directement sur se [site](http://cube.patpat-web.uk/) (Site en HTTP)
+- Vous pouvez tester le jeux directement sur se [site](https://cube.patpat-web.uk/)
+
+**RGB**
+```js
+let color = true;    
+
+function changeColor(colorInput) {
+    const newColor = colorInput;
+    socket.emit('changeColor', newColor);
+    document.getElementById('status').innerText = "Couleur changée !";
+    setTimeout(() => { document.getElementById('status').innerText = ""; }, 2000);
+    document.body.focus(); 
+}
+
+// Function to generate a random color
+function getRandomColor() {
+    const r = Math.floor(Math.random() * 256);
+    const g = Math.floor(Math.random() * 256);
+    const b = Math.floor(Math.random() * 256);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+// Change color every second if color is true
+const changeColorInterval = setInterval(() => {
+    if (color) {
+        const newColor = getRandomColor();
+        changeColor(newColor);
+    } else {
+        clearInterval(changeColorInterval);
+    }
+}, 100);
+
+// To stop the color changing, set color to false
+// color = false; 
+```
