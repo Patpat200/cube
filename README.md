@@ -59,5 +59,8 @@ npx nodemon server.js
 **Licence**
 - Licence: `ISC` (voir `package.json`).
 
+**Testé**
+- Vous pouvez tester le jeux directement sur se [site](http://cube.patpat-web.uk/) (Site en HTTP)
+
 **Auteur**
 - patpat 
