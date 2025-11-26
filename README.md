@@ -1,4 +1,4 @@
-# cube
+# Cube
 
 **Présentation**
 - **Nom**: `cube` — petit projet web Node.js utilisant `express` et `socket.io`.
@@ -53,14 +53,5 @@ npx nodemon server.js
 - Si une dépendance manque: réexécutez `npm install`.
 - Vérifiez le port dans `server.js` si la page ne s'affiche pas.
 
-**Contribuer**
-- Forkez, créez une branche, faites vos modifications puis ouvrez une pull request.
-
-**Licence**
-- Licence: `ISC` (voir `package.json`).
-
 **Testé**
 - Vous pouvez tester le jeux directement sur se [site](http://cube.patpat-web.uk/) (Site en HTTP)
-
-**Auteur**
-- patpat 
