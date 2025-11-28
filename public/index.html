@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Jeu Cubes</title>
+    <title>Jeu du Loup</title>
     <style>
         body { 
             margin: 0; 
@@ -21,10 +21,17 @@
             border: 2px solid rgba(255,255,255,0.5);
             box-sizing: border-box;
             box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
-            transition: background-color 0.2s;
+            transition: background-color 0.2s, border 0.2s, box-shadow 0.2s;
+            display: flex; justify-content: center; align-items: center; font-weight: bold; color: white; text-shadow: 1px 1px 2px black;
+        }
+
+        /* [NOUVEAU] Style pour le Loup */
+        .wolf {
+            border: 5px solid red !important;
+            box-shadow: 0 0 20px red !important;
+            z-index: 100; /* Le loup passe au-dessus */
         }
         
-        /* Bouton pour afficher/cacher le menu */
         #toggle-btn {
             position: fixed; top: 10px; left: 10px;
             z-index: 2000;
@@ -37,23 +44,17 @@
         }
 
         #ui-container {
-            position: fixed; top: 50px; left: 10px; /* Décalé vers le bas pour laisser place au bouton */
+            position: fixed; top: 50px; left: 10px;
             background: rgba(255, 255, 255, 0.9);
             padding: 15px; border-radius: 8px; z-index: 1000;
             display: flex; flex-direction: column; gap: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            
-            /* Animation d'apparition/disparition */
             transition: opacity 0.3s, visibility 0.3s;
-            opacity: 1;
-            visibility: visible;
+            opacity: 1; visibility: visible;
         }
 
-        /* Classe pour cacher le menu */
         #ui-container.hidden {
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none; /* Empêche de cliquer quand c'est caché */
+            opacity: 0; visibility: hidden; pointer-events: none;
         }
 
         button { cursor: pointer; padding: 5px 10px; }
@@ -77,6 +78,7 @@
     </div>
 
     <div id="status" style="font-size: 12px; color: blue; margin-top: 5px;"></div>
+    <div style="margin-top:5px; font-size:11px; color:red;">Le joueur avec le bord ROUGE est le loup !</div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -89,19 +91,16 @@
     
     let myId = null;
     let myX = 0; let myY = 0;
+    let currentWolfId = null; // [NOUVEAU]
     
     const keysPressed = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
-    // --- NOUVELLE FONCTION TOGGLE UI ---
     function toggleUI() {
         const ui = document.getElementById('ui-container');
         ui.classList.toggle('hidden');
-        
-        // Redonne le focus au body pour continuer à bouger sans cliquer sur le jeu
         document.body.focus();
     }
 
-    // --- FONCTION UPLOAD ---
     function uploadImage() {
         const statusDiv = document.getElementById('status');
         const fileInput = document.getElementById('fileInput');
@@ -127,7 +126,6 @@
         }
     }
 
-    // --- FONCTION CHANGEMENT DE COULEUR ---
     function changeColor() {
         const colorInput = document.getElementById('colorInput');
         const newColor = colorInput.value;
@@ -137,7 +135,6 @@
         document.body.focus(); 
     }
 
-    // --- SOCKET IO ---
     socket.on('connect', () => console.log('Connecté !'));
     socket.on('disconnect', () => console.log('Déconnecté...'));
 
@@ -155,11 +152,14 @@
                 updateCubePos(id, serverPlayers[id].x, serverPlayers[id].y);
             }
         });
+        // Appliquer l'effet visuel du loup si on l'a déjà reçu
+        updateWolfVisuals();
     });
 
     socket.on('newPlayer', (data) => {
         playersData[data.playerId] = data.playerInfo;
         createCube(data.playerId, data.playerInfo);
+        updateWolfVisuals();
     });
     
     socket.on('playerMoved', (data) => {
@@ -189,6 +189,25 @@
         delete playersData[playerId];
     });
 
+    // --- [NOUVEAU] RECEPTION DU LOUP ---
+    socket.on('updateWolf', (wolfId) => {
+        currentWolfId = wolfId;
+        updateWolfVisuals();
+    });
+
+    function updateWolfVisuals() {
+        // Enlève la classe wolf partout
+        for (let id in playersDOM) {
+            playersDOM[id].classList.remove('wolf');
+            playersDOM[id].innerText = ""; // Retire le texte
+        }
+        // Ajoute la classe au loup actuel
+        if (currentWolfId && playersDOM[currentWolfId]) {
+            playersDOM[currentWolfId].classList.add('wolf');
+            playersDOM[currentWolfId].innerText = "LOUP"; // Petit texte pour identifier
+        }
+    }
+
     // --- UTILITAIRES ---
     function createCube(id, info) {
         const cube = document.createElement('div');
@@ -210,22 +229,28 @@
         for (const id in playersData) {
             if (id !== myId) {
                 const other = playersData[id];
+                // Vérification de collision simple
                 if (Math.abs(newX - other.x) < cubeSize && Math.abs(newY - other.y) < cubeSize) {
-                    return true;
+                    
+                    // [NOUVEAU] Logique du loup
+                    // Si je suis le loup et que je touche quelqu'un d'autre
+                    if (myId === currentWolfId) {
+                        console.log("Touché ! Transmisson du loup à", id);
+                        socket.emit('tagPlayer', id);
+                    }
+                    
+                    return true; // Bloque le mouvement (comme avant)
                 }
             }
         }
         return false;
     }
 
-    // --- GESTION CLAVIER ---
     document.addEventListener('keydown', (e) => { 
-        // Si on appuie sur H (et qu'on n'est pas en train d'écrire dans un input texte, même s'il n'y en a pas ici par sécurité)
         if (e.key.toLowerCase() === 'h' && document.activeElement.tagName !== 'INPUT') {
             toggleUI();
             return;
         }
-
         if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = true; 
     });
     
@@ -233,7 +258,6 @@
         if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = false; 
     });
 
-    // --- BOUCLE DE JEU ---
     setInterval(() => {
         if (!myId) return;
         let potentialX = myX; let potentialY = myY; let moved = false;
