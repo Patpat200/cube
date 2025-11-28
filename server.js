@@ -11,27 +11,34 @@ const io = require('socket.io')(http, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 let players = {};
-let currentBackground = null; // Stocke l'image de fond
+let currentBackground = null; 
+let wolfId = null; // [NOUVEAU] Stocke l'ID du loup actuel
 
 io.on('connection', (socket) => {
     console.log('Nouveau joueur : ' + socket.id);
 
-    // Création du joueur avec une couleur aléatoire au départ
+    // Création du joueur
     players[socket.id] = {
         x: Math.floor(Math.random() * 500) + 50,
         y: Math.floor(Math.random() * 400) + 50,
         color: '#' + Math.floor(Math.random()*16777215).toString(16)
     };
 
-    // Envoyer la liste des joueurs actuels au nouvel arrivant
+    // [NOUVEAU] Si pas de loup, le nouveau devient le loup
+    if (!wolfId) {
+        wolfId = socket.id;
+    }
+
+    // Envoyer la liste des joueurs
     socket.emit('currentPlayers', players);
     
-    // Si un fond existe déjà, on l'envoie
+    // [NOUVEAU] Dire au nouveau qui est le loup
+    socket.emit('updateWolf', wolfId);
+
     if (currentBackground) {
         socket.emit('updateBackground', currentBackground);
     }
 
-    // Prévenir les autres qu'un nouveau joueur est là
     socket.broadcast.emit('newPlayer', { 
         playerId: socket.id, 
         playerInfo: players[socket.id] 
@@ -50,17 +57,25 @@ io.on('connection', (socket) => {
         }
     });
 
+    // --- [NOUVEAU] GESTION DU LOUP (TAG) ---
+    socket.on('tagPlayer', (targetId) => {
+        // Sécurité : seul le loup actuel peut toucher quelqu'un
+        if (socket.id === wolfId && players[targetId]) {
+            wolfId = targetId; // Le touché devient le loup
+            io.emit('updateWolf', wolfId); // On prévient tout le monde
+        }
+    });
+
     // --- GESTION DU FOND D'ÉCRAN ---
     socket.on('changeBackground', (imageData) => {
         currentBackground = imageData;
         io.emit('updateBackground', imageData);
     });
 
-    // --- GESTION DE LA COULEUR (NOUVEAU) ---
+    // --- GESTION DE LA COULEUR ---
     socket.on('changeColor', (newColor) => {
         if (players[socket.id]) {
-            players[socket.id].color = newColor; // Mise à jour côté serveur
-            // On envoie l'info à tout le monde (y compris celui qui a changé)
+            players[socket.id].color = newColor; 
             io.emit('updatePlayerColor', { 
                 id: socket.id, 
                 color: newColor 
@@ -72,6 +87,17 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         delete players[socket.id];
         io.emit('playerDisconnected', socket.id);
+        
+        // [NOUVEAU] Si le loup part, on en désigne un autre au hasard
+        if (socket.id === wolfId) {
+            const ids = Object.keys(players);
+            if (ids.length > 0) {
+                wolfId = ids[Math.floor(Math.random() * ids.length)];
+                io.emit('updateWolf', wolfId);
+            } else {
+                wolfId = null;
+            }
+        }
         console.log('Joueur déconnecté : ' + socket.id);
     });
 });
