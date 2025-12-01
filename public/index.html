@@ -80,7 +80,7 @@
     <div style="margin-top:5px; font-size:11px; color:red;">Le joueur avec le bord ROUGE est le loup !</div>
 </div>
 
-    <script src="/socket.io/socket.io.js"></script>
+<script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
     const playersDOM = {};
@@ -95,16 +95,14 @@
 
     // Movement speed in pixels per second
     const speedPerSec = 750;
-
-    // [MODIFICATION] Envoi plus rapide pour améliorer la sync (20ms au lieu de 50ms)
     const emitThrottleMs = 20;
     let lastEmitTime = 0;
 
     // Tag cooldown (ms)
-    const tagCooldownMs = 1000; // Réduit à 1s pour plus de réactivité
+    const tagCooldownMs = 1000; 
     let lastTagTime = 0;
 
-    // Canvas for simple particle effects
+    // Canvas for particles
     let fxCanvas, fxCtx, fxParticles = [];
 
     function initFxCanvas() {
@@ -165,7 +163,6 @@
         const statusDiv = document.getElementById('status');
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
-
         if (file) {
             if (file.size > 3 * 1024 * 1024) {
                 alert("Image trop lourde ! (Max 3 Mo).");
@@ -202,18 +199,13 @@
         Object.keys(serverPlayers).forEach((id) => {
             const info = serverPlayers[id];
             playersData[id] = {
-                serverX: info.x,
-                serverY: info.y,
-                displayX: info.x,
-                displayY: info.y,
-                color: info.color,
-                lastUpdate: Date.now()
+                serverX: info.x, serverY: info.y,
+                displayX: info.x, displayY: info.y,
+                color: info.color, lastUpdate: Date.now()
             };
             if (!playersDOM[id]) createCube(id, info);
-
             if (id === socket.id) {
-                myId = id; 
-                myX = info.x; myY = info.y;
+                myId = id; myX = info.x; myY = info.y;
                 document.getElementById('colorInput').value = info.color;
             }
         });
@@ -239,12 +231,8 @@
     });
 
     socket.on('updatePlayerColor', (data) => {
-        if (playersDOM[data.id]) {
-            playersDOM[data.id].style.backgroundColor = data.color;
-        }
-        if (playersData[data.id]) {
-            playersData[data.id].color = data.color;
-        }
+        if (playersDOM[data.id]) playersDOM[data.id].style.backgroundColor = data.color;
+        if (playersData[data.id]) playersData[data.id].color = data.color;
     });
 
     socket.on('playerDisconnected', (playerId) => {
@@ -259,6 +247,11 @@
     socket.on('updateWolf', (wolfId) => {
         currentWolfId = wolfId;
         updateWolfVisuals();
+    });
+
+    // [NOUVEAU] Réception de l'ordre de faire des particules
+    socket.on('playerTagged', (data) => {
+        spawnParticles(data.x, data.y, data.color, 30); // 30 particules
     });
 
     function updateWolfVisuals() {
@@ -310,10 +303,10 @@
             const overlapY = Math.min(myBottom, otherBottom) - Math.max(myTop, otherTop);
 
             if (overlapX > 0 && overlapY > 0) {
+                // On envoie juste la demande de tag, on ne fait pas les particules ici
                 if (myId === currentWolfId && (Date.now() - lastTagTime) > tagCooldownMs) {
                     lastTagTime = Date.now();
                     socket.emit('tagPlayer', id);
-                    spawnParticles(ox + cubeSize / 2, oy + cubeSize / 2, playersData[id].color || '#fff');
                 }
 
                 if (overlapX < overlapY) {
@@ -377,8 +370,10 @@
             if (p.serverX === undefined) continue;
             const targetX = p.serverX;
             const targetY = p.serverY;
-            // Interpolation pour lisser les positions distantes
-            const lerpFactor = Math.min(1, (dt / 1000) * 10);
+            
+            // Interpolation rapide
+            const lerpFactor = Math.min(1, (dt / 1000) * 20);
+            
             p.displayX = (p.displayX === undefined) ? targetX : p.displayX + (targetX - p.displayX) * lerpFactor;
             p.displayY = (p.displayY === undefined) ? targetY : p.displayY + (targetY - p.displayY) * lerpFactor;
             if (playersDOM[id]) updateCubePosDOM(id, p.displayX, p.displayY);
