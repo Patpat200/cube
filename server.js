@@ -41,17 +41,31 @@ io.on('connection', (socket) => {
     socket.emit('updateWolf', wolfId);
     if (currentBackground) socket.emit('updateBackground', currentBackground);
 
-    socket.on('joinGame', () => {
+    // --- MODIFICATION ICI POUR LE PSEUDO ---
+    socket.on('joinGame', (pseudoSent) => {
+        // 1. Gestion du pseudo (Random si vide)
+        let finalPseudo = "Invité";
+        
+        if (pseudoSent && typeof pseudoSent === 'string' && pseudoSent.trim().length > 0) {
+            finalPseudo = pseudoSent.trim().substring(0, 12); // Max 12 caractères
+        } else {
+            finalPseudo = "Cube" + Math.floor(Math.random() * 1000); // Ex: Cube458
+        }
+
+        // 2. Création du joueur avec le pseudo stocké
         players[socket.id] = {
             x: Math.floor(Math.random() * 500) + 50,
             y: Math.floor(Math.random() * 400) + 50,
-            color: '#' + Math.floor(Math.random()*16777215).toString(16)
+            color: '#' + Math.floor(Math.random()*16777215).toString(16),
+            pseudo: finalPseudo 
         };
+
         if (!wolfId) {
             wolfId = socket.id;
             lastWolfMoveTime = Date.now();
             io.emit('updateWolf', wolfId);
         }
+
         socket.emit('gameJoined', { id: socket.id, info: players[socket.id] });
         socket.broadcast.emit('newPlayer', { playerId: socket.id, playerInfo: players[socket.id] });
     });
@@ -85,11 +99,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- CHANGEMENT DE FOND (CORRIGÉ & ÉCONOMIQUE) ---
+    // --- CHANGEMENT DE FOND (SIGHTENGINE) ---
     socket.on('changeBackground', async (imageData) => {
         const now = Date.now();
 
-        // 1. VERIFICATION COOLDOWN
         if (uploadCooldowns[socket.id] && now < uploadCooldowns[socket.id]) {
             const timeLeft = Math.ceil((uploadCooldowns[socket.id] - now) / 1000);
             socket.emit('uploadError', `Attends encore ${timeLeft} secondes avant d'envoyer une image.`);
@@ -109,8 +122,7 @@ io.on('connection', (socket) => {
             const form = new FormData();
             form.append('media', imageBuffer, 'image.jpg');
             
-            // --- CORRECTION ICI : ON NE DEMANDE QUE LA NUDITÉ ---
-            form.append('models', 'nudity'); // Coût = 1 opération
+            form.append('models', 'nudity'); 
             form.append('api_user', API_USER);
             form.append('api_secret', API_SECRET);
 
@@ -118,18 +130,13 @@ io.on('connection', (socket) => {
             const result = response.data;
             
             if (result.status === 'success') {
-                // --- CORRECTION ICI : ON NE VÉRIFIE QUE LA NUDITÉ ---
-                // On a supprimé les vérifications weapon/alcohol/offensive qui faisaient planter
                 const isNude = result.nudity.raw > 0.5 || result.nudity.partial > 0.6;
                 
                 if (isNude) {
-                    // --- CAS : IMAGE INTERDITE ---
                     console.log("⛔ Image bloquée (Nudité détectée) !");
-                    
-                    uploadCooldowns[socket.id] = now + COOLDOWN_PENALTY; // 1 min punition
+                    uploadCooldowns[socket.id] = now + COOLDOWN_PENALTY; 
                     currentBackground = BLOCKED_IMG;
                     io.emit('updateBackground', BLOCKED_IMG);
-
                     io.emit('serverMessage', {
                         text: "⚠️ Une image interdite a été bloquée ! L'auteur est puni pour 1 minute.",
                         color: "red"
@@ -137,14 +144,10 @@ io.on('connection', (socket) => {
                     socket.emit('uploadError', "Image interdite ! Tu es bloqué pour 1 minute.");
 
                 } else {
-                    // --- CAS : IMAGE VALIDE ---
                     console.log("✅ Image validée.");
-                    
-                    uploadCooldowns[socket.id] = now + COOLDOWN_NORMAL; // 15 sec attente
-
+                    uploadCooldowns[socket.id] = now + COOLDOWN_NORMAL; 
                     currentBackground = imageData;
                     io.emit('updateBackground', imageData);
-                    
                     socket.emit('serverMessage', {
                         text: "Image changée avec succès !",
                         color: "green"
