@@ -18,42 +18,56 @@ let wolfId = null;
 let lastTagTime = 0;
 const TAG_COOLDOWN = 1000; 
 
-// --- [NOUVEAU] Suivi du dernier mouvement du loup ---
+// Suivi du dernier mouvement du loup
 let lastWolfMoveTime = Date.now();
 
 io.on('connection', (socket) => {
-    console.log('Nouveau joueur : ' + socket.id);
+    console.log('Nouveau spectateur : ' + socket.id);
 
-    players[socket.id] = {
-        x: Math.floor(Math.random() * 500) + 50,
-        y: Math.floor(Math.random() * 400) + 50,
-        color: '#' + Math.floor(Math.random()*16777215).toString(16)
-    };
-
-    if (!wolfId) {
-        wolfId = socket.id;
-        // Si on devient le premier loup, on initialise le chrono
-        lastWolfMoveTime = Date.now();
-    }
-
+    // 1. On envoie l'état actuel (background + joueurs) au spectateur
     socket.emit('currentPlayers', players);
     socket.emit('updateWolf', wolfId);
-
     if (currentBackground) {
         socket.emit('updateBackground', currentBackground);
     }
 
-    socket.broadcast.emit('newPlayer', { 
-        playerId: socket.id, 
-        playerInfo: players[socket.id] 
+    // 2. Le joueur demande à rejoindre la partie
+    socket.on('joinGame', () => {
+        console.log('Joueur rejoint la partie : ' + socket.id);
+        
+        // Création du joueur
+        players[socket.id] = {
+            x: Math.floor(Math.random() * 500) + 50,
+            y: Math.floor(Math.random() * 400) + 50,
+            color: '#' + Math.floor(Math.random()*16777215).toString(16)
+        };
+
+        // Gestion du premier loup
+        if (!wolfId) {
+            wolfId = socket.id;
+            lastWolfMoveTime = Date.now();
+            io.emit('updateWolf', wolfId);
+        }
+
+        // On renvoie ses infos au joueur lui-même
+        socket.emit('gameJoined', { 
+            id: socket.id, 
+            info: players[socket.id] 
+        });
+
+        // On prévient les autres
+        socket.broadcast.emit('newPlayer', { 
+            playerId: socket.id, 
+            playerInfo: players[socket.id] 
+        });
     });
 
     socket.on('playerMovement', (movementData) => {
+        // Sécurité : on ne bouge que si le joueur existe (a cliqué sur Play)
         if (players[socket.id]) {
             players[socket.id].x = movementData.x;
             players[socket.id].y = movementData.y;
 
-            // --- [NOUVEAU] Si c'est le loup qui bouge, on met à jour son timer ---
             if (socket.id === wolfId) {
                 lastWolfMoveTime = Date.now();
             }
@@ -66,34 +80,26 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- GESTION DU LOUP ET DES PARTICULES ---
+    // --- GESTION DU TAG ---
     socket.on('tagPlayer', (targetId) => {
         if (socket.id === wolfId && players[targetId]) {
-            
             const now = Date.now();
             const wolf = players[socket.id];
             const target = players[targetId];
-            
             const CUBE_SIZE = 50; 
             const TOLERANCE = 40; 
 
             const dx = Math.abs(wolf.x - target.x);
             const dy = Math.abs(wolf.y - target.y);
 
-            const isCloseEnough = dx < (CUBE_SIZE + TOLERANCE) && dy < (CUBE_SIZE + TOLERANCE);
-
-            if (isCloseEnough) {
+            if (dx < (CUBE_SIZE + TOLERANCE) && dy < (CUBE_SIZE + TOLERANCE)) {
                 if (now - lastTagTime > TAG_COOLDOWN) {
                     wolfId = targetId;
                     lastTagTime = now;
-                    
-                    // --- [NOUVEAU] Reset du timer AFK pour le nouveau loup ---
                     lastWolfMoveTime = Date.now();
-
+                    
                     io.emit('updateWolf', wolfId);
-
-                    // On dit à tout le monde de faire des particules !
-                    // On vise le centre du cube cible (x + taille/2)
+                    
                     io.emit('playerTagged', {
                         x: target.x + (CUBE_SIZE / 2),
                         y: target.y + (CUBE_SIZE / 2),
@@ -112,57 +118,51 @@ io.on('connection', (socket) => {
     socket.on('changeColor', (newColor) => {
         if (players[socket.id]) {
             players[socket.id].color = newColor; 
-            io.emit('updatePlayerColor', { 
-                id: socket.id, 
-                color: newColor 
-            });
+            io.emit('updatePlayerColor', { id: socket.id, color: newColor });
         }
     });
 
     socket.on('disconnect', () => {
-        delete players[socket.id];
-        io.emit('playerDisconnected', socket.id);
-        
-        if (socket.id === wolfId) {
-            const ids = Object.keys(players);
-            if (ids.length > 0) {
-                wolfId = ids[Math.floor(Math.random() * ids.length)];
-                
-                // --- [NOUVEAU] Reset du timer AFK pour le loup remplaçant ---
-                lastWolfMoveTime = Date.now();
-
-                io.emit('updateWolf', wolfId);
-                lastTagTime = Date.now(); 
-            } else {
-                wolfId = null;
-            }
+        if (players[socket.id]) {
+            removePlayer(socket.id);
         }
-        console.log('Joueur déconnecté : ' + socket.id);
+        console.log('Déconnexion : ' + socket.id);
     });
 });
 
-// --- [NOUVEAU] Boucle de vérification AFK (toutes les secondes) ---
+// Fonction utilitaire pour supprimer un joueur proprement
+function removePlayer(id) {
+    delete players[id];
+    io.emit('playerDisconnected', id);
+    
+    if (id === wolfId) {
+        const ids = Object.keys(players);
+        if (ids.length > 0) {
+            wolfId = ids[Math.floor(Math.random() * ids.length)];
+            lastWolfMoveTime = Date.now();
+            io.emit('updateWolf', wolfId);
+            lastTagTime = Date.now(); 
+        } else {
+            wolfId = null;
+            io.emit('updateWolf', null);
+        }
+    }
+}
+
+// --- BOUCLE ANTI-AFK ---
 setInterval(() => {
     const ids = Object.keys(players);
-    // On ne vérifie que s'il y a un loup et au moins 2 joueurs (pour pouvoir passer la main)
+    // On kick si le LOUP est inactif et qu'il y a plus d'1 joueur
     if (wolfId && ids.length > 1) {
         const now = Date.now();
-        
-        // Si le loup n'a pas bougé depuis 30 secondes (30000 ms)
-        if (now - lastWolfMoveTime > 30000) {
-            // console.log("Loup inactif (AFK) détecté ! Changement...");
-
-            // On choisit un nouveau loup différent de l'actuel
-            let newWolfId;
-            do {
-                newWolfId = ids[Math.floor(Math.random() * ids.length)];
-            } while (newWolfId === wolfId);
-
-            wolfId = newWolfId;
-            lastWolfMoveTime = Date.now(); // Reset pour le nouveau loup
+        if (now - lastWolfMoveTime > 15000) { // 15 secondes
+            console.log("Loup AFK - Expulsion du joueur : " + wolfId);
             
-            // On informe les clients
-            io.emit('updateWolf', wolfId);
+            // On envoie un message spécifique au joueur AFK pour le remettre au menu
+            io.to(wolfId).emit('afkKicked');
+            
+            // On le supprime du jeu
+            removePlayer(wolfId);
         }
     }
 }, 1000);
