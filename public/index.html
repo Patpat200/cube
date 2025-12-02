@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Cube Game - Tag</title>
+    <title>Cube Game</title>
     <style>
         body { 
             margin: 0; overflow: hidden; 
@@ -28,6 +28,30 @@
             display: flex; justify-content: center; align-items: center; 
             font-weight: bold; color: white; text-shadow: 1px 1px 2px black;
         }
+        
+        /* --- NOUVEAU CSS POUR LE PSEUDO AU SURVOL --- */
+        .cube::after {
+            content: attr(data-pseudo); /* Récupère le pseudo stocké */
+            position: absolute;
+            bottom: 120%; /* Juste au-dessus du cube */
+            left: 50%;
+            transform: translateX(-50%); /* Centré */
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0; /* Caché par défaut */
+            transition: opacity 0.2s;
+            z-index: 500;
+        }
+        .cube:hover::after {
+            opacity: 1; /* Visible quand on survole */
+        }
+        /* ------------------------------------------ */
+
         .wolf {
             border: 5px solid red !important;
             box-shadow: 0 0 20px red !important;
@@ -64,7 +88,7 @@
         #ui-container.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
         button { cursor: pointer; padding: 5px 10px; }
         
-        /* Message Global (La honte) */
+        /* Message Global */
         #global-msg {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             padding: 10px 20px; border-radius: 5px; color: white; font-weight: bold;
@@ -81,6 +105,10 @@
 
 <div id="menu-overlay">
     <h1 style="color:white; text-shadow:2px 2px 4px black; margin-bottom: 30px;">CUBE TAG</h1>
+    
+    <input type="text" id="pseudoInput" placeholder="Ton Pseudo..." maxlength="12" 
+           style="padding: 10px; font-size: 1.2rem; border-radius: 10px; border: none; margin-bottom: 20px; text-align: center; width: 200px;">
+    
     <button id="play-btn" onclick="joinGame()">JOUER</button>
     <div id="afk-msg" style="color: red; margin-top: 20px; font-weight: bold; display: none;">Vous avez été exclu pour inactivité (AFK)</div>
 </div>
@@ -129,12 +157,18 @@
     }
     
     function joinGame() {
+        // --- RECUPERATION DU PSEUDO ---
+        const input = document.getElementById('pseudoInput');
+        const pseudo = input.value; // On envoie tel quel, le serveur gère le reste
+
         document.getElementById('menu-overlay').classList.add('hidden');
         document.getElementById('game-layer').classList.remove('blurred');
         document.getElementById('toggle-btn').style.display = 'block';
         document.getElementById('ui-container').style.display = 'flex';
         document.getElementById('afk-msg').style.display = 'none';
-        socket.emit('joinGame');
+        
+        // Envoi de l'event joinGame avec le pseudo
+        socket.emit('joinGame', pseudo);
         isPlaying = true;
     }
 
@@ -153,17 +187,12 @@
         document.getElementById('status').innerText = message;
     });
 
-    // [NOUVEAU] Gestion des messages serveur (Alerte ou Succès)
     socket.on('serverMessage', (data) => {
         const msgDiv = document.getElementById('global-msg');
         msgDiv.innerText = data.text;
         msgDiv.style.backgroundColor = data.color === 'red' ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 128, 0, 0.8)';
         msgDiv.style.display = 'block';
-        
-        // On cache le message après 4 secondes
-        setTimeout(() => {
-            msgDiv.style.display = 'none';
-        }, 4000);
+        setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
     });
 
     socket.on('gameJoined', (data) => {
@@ -215,9 +244,16 @@
         cube.classList.add('cube'); cube.id = id;
         cube.style.backgroundColor = info.color;
         cube.style.transform = `translate3d(${info.x}px, ${info.y}px, 0)`;
+        
+        // --- AJOUT ATTRIBUT PSEUDO ---
+        if (info.pseudo) {
+            cube.setAttribute('data-pseudo', info.pseudo);
+        }
+        
         gameLayer.appendChild(cube);
         playersDOM[id] = cube;
     }
+
     function updateWolfVisuals() {
         for (let id in playersDOM) { playersDOM[id].classList.remove('wolf'); playersDOM[id].innerText = ""; }
         if (currentWolfId && playersDOM[currentWolfId]) { playersDOM[currentWolfId].classList.add('wolf'); playersDOM[currentWolfId].innerText = "LOUP"; }
