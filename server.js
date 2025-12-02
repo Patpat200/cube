@@ -1,4 +1,3 @@
-
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
@@ -18,7 +17,7 @@ let currentBackground = null;
 let wolfId = null; 
 
 // --- CONFIGURATION ---
-// Clés API (Render ou .env)
+// Clés API
 const API_USER = process.env.SIGHTENGINE_USER; 
 const API_SECRET = process.env.SIGHTENGINE_SECRET;
 const API_URL = 'https://api.sightengine.com/1.0/check.json';
@@ -27,9 +26,9 @@ const API_URL = 'https://api.sightengine.com/1.0/check.json';
 const BLOCKED_IMG = "https://i.redd.it/58qnz74nf5j41.png";
 
 // Gestion Cooldowns
-let uploadCooldowns = {}; // Stocke l'heure de fin de punition par joueur
+let uploadCooldowns = {}; 
 const COOLDOWN_NORMAL = 15000; // 15 secondes
-const COOLDOWN_PENALTY = 60000; // 1 minute
+const COOLDOWN_PENALTY = 60000; // 1 minute (Punition)
 
 let lastTagTime = 0;
 const TAG_COOLDOWN = 1000; 
@@ -86,19 +85,17 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- CHANGEMENT DE FOND (OPTIMISÉ) ---
+    // --- CHANGEMENT DE FOND (CORRIGÉ & ÉCONOMIQUE) ---
     socket.on('changeBackground', async (imageData) => {
         const now = Date.now();
 
-        // 1. VERIFICATION COOLDOWN (AVANT API)
-        // Si le joueur est en punition ou en attente, on bloque direct.
+        // 1. VERIFICATION COOLDOWN
         if (uploadCooldowns[socket.id] && now < uploadCooldowns[socket.id]) {
             const timeLeft = Math.ceil((uploadCooldowns[socket.id] - now) / 1000);
             socket.emit('uploadError', `Attends encore ${timeLeft} secondes avant d'envoyer une image.`);
-            return; // ON S'ARRÊTE ICI -> 0 APPEL API
+            return;
         }
 
-        // Vérif config
         if (!API_USER || !API_SECRET) {
             socket.emit('uploadError', "Erreur config serveur (Clés manquantes).");
             return;
@@ -111,44 +108,39 @@ io.on('connection', (socket) => {
             const imageBuffer = Buffer.from(base64Data, 'base64');
             const form = new FormData();
             form.append('media', imageBuffer, 'image.jpg');
-            form.append('models', 'nudity'); 
+            
+            // --- CORRECTION ICI : ON NE DEMANDE QUE LA NUDITÉ ---
+            form.append('models', 'nudity'); // Coût = 1 opération
             form.append('api_user', API_USER);
             form.append('api_secret', API_SECRET);
 
-            // 2. APPEL API (Uniquement si pas de cooldown)
             const response = await axios.post(API_URL, form, { headers: form.getHeaders() });
             const result = response.data;
             
             if (result.status === 'success') {
+                // --- CORRECTION ICI : ON NE VÉRIFIE QUE LA NUDITÉ ---
+                // On a supprimé les vérifications weapon/alcohol/offensive qui faisaient planter
                 const isNude = result.nudity.raw > 0.5 || result.nudity.partial > 0.6;
-                const isUnsafe = isNude || result.weapon > 0.5 || result.alcohol > 0.5 || result.offensive.prob > 0.5;
-
-                if (isUnsafe) {
+                
+                if (isNude) {
                     // --- CAS : IMAGE INTERDITE ---
-                    console.log("⛔ Image bloquée ! Punition activée.");
+                    console.log("⛔ Image bloquée (Nudité détectée) !");
                     
-                    // 1. Punition : 1 minute de cooldown
-                    uploadCooldowns[socket.id] = now + COOLDOWN_PENALTY;
-                    
-                    // 2. Image Troll
+                    uploadCooldowns[socket.id] = now + COOLDOWN_PENALTY; // 1 min punition
                     currentBackground = BLOCKED_IMG;
                     io.emit('updateBackground', BLOCKED_IMG);
 
-                    // 3. Message de la honte à tout le monde
                     io.emit('serverMessage', {
-                        text: "⚠️ Une tentative d'image interdite a été bloquée ! L'auteur est puni pour 1 minute.",
+                        text: "⚠️ Une image interdite a été bloquée ! L'auteur est puni pour 1 minute.",
                         color: "red"
                     });
-                    
-                    // Message privé au coupable
                     socket.emit('uploadError', "Image interdite ! Tu es bloqué pour 1 minute.");
 
                 } else {
                     // --- CAS : IMAGE VALIDE ---
                     console.log("✅ Image validée.");
                     
-                    // 1. Cooldown normal : 15 secondes
-                    uploadCooldowns[socket.id] = now + COOLDOWN_NORMAL;
+                    uploadCooldowns[socket.id] = now + COOLDOWN_NORMAL; // 15 sec attente
 
                     currentBackground = imageData;
                     io.emit('updateBackground', imageData);
@@ -159,10 +151,11 @@ io.on('connection', (socket) => {
                     });
                 }
             } else {
+                console.error("Erreur API SightEngine:", result);
                 socket.emit('uploadError', "Erreur de l'API. Réessaie.");
             }
         } catch (error) {
-            console.error("Erreur API:", error.message);
+            console.error("Erreur technique API:", error.message);
             socket.emit('uploadError', "Erreur technique.");
         }
     });
@@ -176,7 +169,6 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         if (players[socket.id]) removePlayer(socket.id);
-        // On peut nettoyer le cooldown pour ne pas saturer la mémoire (optionnel)
         delete uploadCooldowns[socket.id];
     });
 });
@@ -201,7 +193,7 @@ function removePlayer(id) {
 setInterval(() => {
     const ids = Object.keys(players);
     if (wolfId && ids.length > 1) {
-        if (Date.now() - lastWolfMoveTime > 30000) { 
+        if (Date.now() - lastWolfMoveTime > 15000) { 
             io.to(wolfId).emit('afkKicked');
             removePlayer(wolfId);
         }
