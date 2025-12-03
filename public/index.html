@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Cube Game - Tag</title>
+    <title>Cube Game</title>
     <style>
         body { 
             margin: 0; overflow: hidden; 
@@ -68,41 +68,11 @@
             z-index: 4000; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             display: none;
         }
-
-        /* --- STYLES INPUT & ICONE SVG --- */
-        .password-wrapper {
-            position: relative;
-            width: 90%;
-            margin: 0 auto 10px auto;
-        }
-        .password-wrapper input {
-            width: 100%;
-            padding: 10px;
-            padding-right: 40px; /* Espace pour l'icône */
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            box-sizing: border-box;
-        }
-        .eye-icon {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0.6;
-            transition: opacity 0.2s;
-        }
+        .password-wrapper { position: relative; width: 90%; margin: 0 auto 10px auto; }
+        .password-wrapper input { width: 100%; padding: 10px; padding-right: 40px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        .eye-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; opacity: 0.6; transition: opacity 0.2s; }
         .eye-icon:hover { opacity: 1; }
-        .eye-icon svg {
-            width: 100%;
-            height: 100%;
-            fill: #333;
-        }
+        .eye-icon svg { width: 100%; height: 100%; fill: #333; }
     </style>
 </head>
 <body>
@@ -112,7 +82,9 @@
 
 <div id="menu-overlay">
     <h1 style="color:white; text-shadow:2px 2px 4px black; margin-bottom: 20px;">CUBE TAG</h1>
-    <div style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 10px; text-align: center; width: 300px; box-shadow: 0 0 15px rgba(0,0,0,0.5);">
+    
+    <div id="main-menu" style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 10px; text-align: center; width: 300px; box-shadow: 0 0 15px rgba(0,0,0,0.5);">
+        
         <div style="margin-bottom: 15px; display: flex; justify-content: space-around; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
             <button onclick="showForm('login')" id="tab-login" style="background:none; border:none; border-bottom: 3px solid #4CAF50; font-weight:bold; cursor:pointer; font-size: 16px;">CONNEXION</button>
             <button onclick="showForm('register')" id="tab-register" style="background:none; border:none; color:#777; cursor:pointer; font-size: 16px;">INSCRIPTION</button>
@@ -120,33 +92,60 @@
 
         <div id="form-login">
             <input type="text" id="loginPseudo" placeholder="Ton Pseudo" style="width: 90%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
-            
             <div class="password-wrapper">
                 <input type="password" id="loginPass" placeholder="Mot de passe">
-                <div class="eye-icon" onclick="togglePass('loginPass', this)">
-                    <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-                </div>
+                <div class="eye-icon" onclick="togglePass('loginPass', this)"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></div>
             </div>
-
             <button onclick="doLogin()" style="width: 100%; padding: 10px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold;">SE CONNECTER</button>
         </div>
 
         <div id="form-register" style="display:none;">
             <input type="text" id="regPseudo" placeholder="Nouveau Pseudo" maxlength="12" style="width: 90%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
-            
             <div class="password-wrapper">
                 <input type="password" id="regPass" placeholder="Mot de passe">
-                <div class="eye-icon" onclick="togglePass('regPass', this)">
-                    <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5 5-5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-                </div>
+                <div class="eye-icon" onclick="togglePass('regPass', this)"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></div>
             </div>
-
             <button onclick="doRegister()" style="width: 100%; padding: 10px; background: #2196F3; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold;">CRÉER COMPTE</button>
         </div>
 
         <div id="auth-msg" style="margin-top: 10px; font-size: 0.9em; font-weight: bold; min-height: 20px;"></div>
+
+        <hr style="margin: 15px 0; border: 0; border-top: 1px solid #ddd;">
+        <button onclick="openStats()" style="width: 100%; padding: 10px; background: #9C27B0; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; margin-bottom: 5px;">🏆 STATISTIQUES & CLASSEMENT</button>
     </div>
-    <button onclick="joinGameAsGuest()" style="margin-top: 20px; background: none; border: 1px solid rgba(255,255,255,0.5); color: rgba(255,255,255,0.8); padding: 8px 15px; cursor: pointer; border-radius: 20px;">Jouer en tant qu'invité</button>
+
+    <div id="stats-panel" style="display:none; background: rgba(255,255,255,0.95); padding: 20px; border-radius: 10px; width: 350px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.6); max-height: 80vh; overflow-y: auto;">
+        <h2 style="margin-top: 0; color: #333;">Statistiques</h2>
+        
+        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
+            <button onclick="showStatTab('me')" id="btn-stat-me" style="background:#4CAF50; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Mes Stats</button>
+            <button onclick="showStatTab('top')" id="btn-stat-top" style="background:#ccc; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Classement</button>
+        </div>
+
+        <div id="view-my-stats">
+            <p id="stats-loading">Chargement...</p>
+            <div id="stats-content" style="display:none; text-align: left; font-size: 14px;">
+                <p><strong>Joueur :</strong> <span id="st-pseudo"></span></p>
+                <p><strong>Tags infligés (Loup) :</strong> <span id="st-tags">0</span> 🎯</p>
+                <p><strong>Fois touché :</strong> <span id="st-deaths">0</span> 💀</p>
+                <p><strong>Ratio :</strong> <span id="st-ratio">0</span></p>
+                <p><strong>Parties rejointes :</strong> <span id="st-games">0</span> 🎮</p>
+                <p><strong>Distance :</strong> <span id="st-dist">0</span> px 🏃</p>
+                <p><strong>Fonds changés :</strong> <span id="st-bg">0</span> 🖼️</p>
+            </div>
+        </div>
+
+        <div id="view-leaderboard" style="display:none;">
+            <h4 style="margin:5px 0;">Top Chasseurs 🎯</h4>
+            <ul id="list-hunters" style="list-style: none; padding: 0; margin-bottom: 15px; text-align: left; font-size: 13px;"></ul>
+            <h4 style="margin:5px 0;">Top Voyageurs 🏃</h4>
+            <ul id="list-travelers" style="list-style: none; padding: 0; text-align: left; font-size: 13px;"></ul>
+        </div>
+
+        <button onclick="closeStats()" style="margin-top: 15px; background: #555; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer;">Retour</button>
+    </div>
+
+    <button id="guest-btn" onclick="joinGameAsGuest()" style="margin-top: 20px; background: none; border: 1px solid rgba(255,255,255,0.5); color: rgba(255,255,255,0.8); padding: 8px 15px; cursor: pointer; border-radius: 20px;">Jouer en tant qu'invité</button>
     <div id="afk-msg" style="color: red; margin-top: 20px; font-weight: bold; display: none;">Vous avez été exclu pour inactivité (AFK)</div>
 </div>
 
@@ -179,7 +178,6 @@
     let fxCanvas, fxCtx, fxParticles = [];
     const gameLayer = document.getElementById('game-layer');
 
-    // --- GESTION DE L'INTERFACE (ONGLETS) ---
     function showForm(type) {
         document.getElementById('auth-msg').innerText = "";
         if (type === 'login') {
@@ -199,103 +197,61 @@
         }
     }
 
-    // --- GESTION MOT DE PASSE (SVG) ---
-    // SVG Oeil Ouvert
     const eyeOpenSVG = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
-    // SVG Oeil Barré (Fermé)
     const eyeOffSVG = '<svg viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>';
 
     function togglePass(inputId, iconContainer) {
         const input = document.getElementById(inputId);
-        if (input.type === "password") {
-            input.type = "text";
-            // Quand le texte est visible, on affiche l'icône barrée pour dire "cacher"
-            iconContainer.innerHTML = eyeOffSVG;
-        } else {
-            input.type = "password";
-            // Quand le texte est caché, on affiche l'icône oeil normal pour dire "voir"
-            iconContainer.innerHTML = eyeOpenSVG;
-        }
+        if (input.type === "password") { input.type = "text"; iconContainer.innerHTML = eyeOffSVG; } 
+        else { input.type = "password"; iconContainer.innerHTML = eyeOpenSVG; }
     }
 
-    // --- CONNEXION ---
     async function doLogin() {
         const pseudo = document.getElementById('loginPseudo').value;
         const pass = document.getElementById('loginPass').value;
         const msg = document.getElementById('auth-msg');
-
         if (!pseudo || !pass) { msg.innerText = "Champs manquants !"; msg.style.color = "orange"; return; }
-
         msg.innerText = "Connexion...";
-        
         try {
             const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pseudo, password: pass })
             });
             const data = await res.json();
-
             if (data.success) {
-                msg.innerText = "Succès !";
-                msg.style.color = "green";
+                msg.innerText = "Succès !"; msg.style.color = "green";
                 launchGame(data.pseudo);
-            } else {
-                msg.innerText = data.message;
-                msg.style.color = "red";
-            }
-        } catch (e) {
-            msg.innerText = "Erreur serveur";
-            msg.style.color = "red";
-        }
+            } else { msg.innerText = data.message; msg.style.color = "red"; }
+        } catch (e) { msg.innerText = "Erreur serveur"; msg.style.color = "red"; }
     }
 
-    // --- INSCRIPTION ---
     async function doRegister() {
         const pseudo = document.getElementById('regPseudo').value;
         const pass = document.getElementById('regPass').value;
         const msg = document.getElementById('auth-msg');
-
         if (!pseudo || !pass) { msg.innerText = "Champs manquants !"; msg.style.color = "orange"; return; }
-
-        msg.innerText = "Création du compte...";
-
+        msg.innerText = "Création...";
         try {
             const res = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pseudo, password: pass })
             });
             const data = await res.json();
-
             if (data.success) {
-                msg.innerText = "Compte créé ! Connecte-toi maintenant.";
-                msg.style.color = "green";
-                showForm('login');
-                document.getElementById('loginPseudo').value = pseudo;
-            } else {
-                msg.innerText = data.message;
-                msg.style.color = "red";
-            }
-        } catch (e) {
-            msg.innerText = "Erreur serveur";
-            msg.style.color = "red";
-        }
+                msg.innerText = "Compte créé !"; msg.style.color = "green";
+                showForm('login'); document.getElementById('loginPseudo').value = pseudo;
+            } else { msg.innerText = data.message; msg.style.color = "red"; }
+        } catch (e) { msg.innerText = "Erreur serveur"; msg.style.color = "red"; }
     }
 
-    // --- INVITE ---
-    function joinGameAsGuest() {
-        launchGame("");
-    }
+    function joinGameAsGuest() { launchGame(""); }
 
-    // --- LANCEMENT DU JEU ---
     function launchGame(pseudo) {
         document.getElementById('menu-overlay').classList.add('hidden');
         document.getElementById('game-layer').classList.remove('blurred');
         document.getElementById('toggle-btn').style.display = 'block';
         document.getElementById('ui-container').style.display = 'flex';
         document.getElementById('afk-msg').style.display = 'none';
-        
         socket.emit('joinGame', pseudo);
         isPlaying = true;
     }
@@ -303,10 +259,7 @@
     function returnToMenu(reason = "") {
         isPlaying = false; myId = null;
         for (let id in playersDOM) { playersDOM[id].remove(); }
-        playersDOM = {};
-        playersData = {};
-        currentWolfId = null;
-
+        playersDOM = {}; playersData = {}; currentWolfId = null;
         document.getElementById('menu-overlay').classList.remove('hidden');
         document.getElementById('game-layer').classList.add('blurred');
         document.getElementById('toggle-btn').style.display = 'none';
@@ -328,18 +281,15 @@
     }
 
     socket.on('uploadError', (message) => { alert("⛔ " + message); document.getElementById('status').innerText = message; });
-    
     socket.on('serverMessage', (data) => {
         const msgDiv = document.getElementById('global-msg');
         msgDiv.innerText = data.text;
         msgDiv.style.backgroundColor = data.color === 'red' ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 128, 0, 0.8)';
-        msgDiv.style.display = 'block';
-        setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
+        msgDiv.style.display = 'block'; setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
     });
 
     socket.on('gameJoined', (data) => {
-        myId = data.id; const info = data.info;
-        myX = info.x; myY = info.y;
+        myId = data.id; const info = data.info; myX = info.x; myY = info.y;
         document.getElementById('colorInput').value = info.color;
         playersData[myId] = { serverX: info.x, serverY: info.y, displayX: info.x, displayY: info.y, color: info.color };
         createCube(myId, info);
@@ -347,7 +297,6 @@
 
     socket.on('afkKicked', () => returnToMenu('afk'));
     socket.on('disconnect', () => { if (isPlaying) returnToMenu(); });
-    
     socket.on('currentPlayers', (serverPlayers) => {
         Object.keys(serverPlayers).forEach((id) => {
             if (isPlaying && id === myId) return;
@@ -461,16 +410,88 @@
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
         if (file) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerText = "Envoi à l'analyse...";
+            const statusDiv = document.getElementById('status'); statusDiv.innerText = "Envoi...";
             const reader = new FileReader();
             reader.onload = (e) => socket.emit('changeBackground', e.target.result);
             reader.readAsDataURL(file);
-        } else {
-            alert("Sélectionne un fichier !");
-        }
+        } else { alert("Sélectionne un fichier !"); }
     }
     function changeColor() { socket.emit('changeColor', document.getElementById('colorInput').value); }
+    
+    // --- FONCTIONS STATS ---
+    function openStats() {
+        document.getElementById('main-menu').style.display = 'none';
+        document.getElementById('guest-btn').style.display = 'none';
+        document.getElementById('stats-panel').style.display = 'block';
+        showStatTab('me');
+    }
+    function closeStats() {
+        document.getElementById('stats-panel').style.display = 'none';
+        document.getElementById('main-menu').style.display = 'block';
+        document.getElementById('guest-btn').style.display = 'block';
+    }
+    function showStatTab(tab) {
+        if (tab === 'me') {
+            document.getElementById('view-my-stats').style.display = 'block';
+            document.getElementById('view-leaderboard').style.display = 'none';
+            document.getElementById('btn-stat-me').style.background = '#4CAF50'; document.getElementById('btn-stat-me').style.color = 'white';
+            document.getElementById('btn-stat-top').style.background = '#ccc'; document.getElementById('btn-stat-top').style.color = 'black';
+            loadMyStats();
+        } else {
+            document.getElementById('view-my-stats').style.display = 'none';
+            document.getElementById('view-leaderboard').style.display = 'block';
+            document.getElementById('btn-stat-top').style.background = '#2196F3'; document.getElementById('btn-stat-top').style.color = 'white';
+            document.getElementById('btn-stat-me').style.background = '#ccc'; document.getElementById('btn-stat-me').style.color = 'black';
+            loadLeaderboard();
+        }
+    }
+    async function loadMyStats() {
+        const pseudoInput = document.getElementById('loginPseudo').value;
+        const msgDiv = document.getElementById('stats-loading');
+        const contentDiv = document.getElementById('stats-content');
+        if (!pseudoInput) { msgDiv.innerText = "Entre ton pseudo (case connexion) !"; contentDiv.style.display = 'none'; return; }
+        msgDiv.innerText = "Chargement..."; contentDiv.style.display = 'none';
+        try {
+            const res = await fetch('/api/stats/' + encodeURIComponent(pseudoInput));
+            const data = await res.json();
+            if (data.success && data.stats) {
+                msgDiv.style.display = 'none'; contentDiv.style.display = 'block';
+                document.getElementById('st-pseudo').innerText = data.stats.pseudo;
+                document.getElementById('st-tags').innerText = data.stats.tagsInflicted || 0;
+                document.getElementById('st-deaths').innerText = data.stats.timesTagged || 0;
+                document.getElementById('st-ratio').innerText = data.stats.ratio || 0;
+                document.getElementById('st-games').innerText = data.stats.gamesJoined || 0;
+                document.getElementById('st-dist').innerText = data.stats.distanceTraveled || 0;
+                document.getElementById('st-bg').innerText = data.stats.backgroundsChanged || 0;
+            } else { msgDiv.innerText = "Pas de stats trouvées."; msgDiv.style.display = 'block'; }
+        } catch (e) { msgDiv.innerText = "Erreur."; }
+    }
+    async function loadLeaderboard() {
+        const listHunters = document.getElementById('list-hunters');
+        const listTravelers = document.getElementById('list-travelers');
+        listHunters.innerHTML = "Chargement..."; listTravelers.innerHTML = "Chargement...";
+        try {
+            const res = await fetch('/api/leaderboard');
+            const data = await res.json();
+            if (data.success) {
+                listHunters.innerHTML = "";
+                data.hunters.forEach((p, i) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<strong>#${i+1} ${p.pseudo}</strong> : ${p.tagsInflicted} tags`;
+                    li.style.borderBottom = "1px solid #eee"; li.style.padding = "4px 0";
+                    listHunters.appendChild(li);
+                });
+                listTravelers.innerHTML = "";
+                data.travelers.forEach((p, i) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<strong>#${i+1} ${p.pseudo}</strong> : ${Math.round(p.distanceTraveled)} px`;
+                    li.style.borderBottom = "1px solid #eee"; li.style.padding = "4px 0";
+                    listTravelers.appendChild(li);
+                });
+            }
+        } catch (e) { listHunters.innerHTML = "Erreur."; }
+    }
+
     document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h' && document.activeElement.tagName !== 'INPUT') toggleUI(); if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = true; });
     document.addEventListener('keyup', (e) => { if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = false; });
     let lastFrameTime = performance.now();
