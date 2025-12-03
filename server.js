@@ -6,16 +6,14 @@ const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 const bcrypt = require('bcryptjs');
-const mongoose = require('mongoose'); // <--- NOUVEAU
+const mongoose = require('mongoose');
 
-// --- CONNEXION MONGODB (ATLAS) ---
-// On se connecte à l'URL stockée dans les variables d'environnement Render
+// --- CONNEXION MONGODB ---
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ Connecté à MongoDB'))
     .catch(err => console.error('❌ Erreur MongoDB:', err));
 
 // --- MODÈLE UTILISATEUR ---
-// Définition de la structure d'un joueur en base de données
 const UserSchema = new mongoose.Schema({
     pseudo: { type: String, unique: true, required: true },
     password: { type: String, required: true },
@@ -28,19 +26,19 @@ const io = require('socket.io')(http, {
     maxHttpBufferSize: 5 * 1024 * 1024 
 });
 
-// Middleware pour lire le JSON envoyé par le client
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- VARIABLES DU JEU ---
+// --- VARIABLES JEU ---
 let players = {};
 let currentBackground = null; 
 let wolfId = null; 
-// Clés API SightEngine
+
 const API_USER = process.env.SIGHTENGINE_USER; 
 const API_SECRET = process.env.SIGHTENGINE_SECRET;
 const API_URL = 'https://api.sightengine.com/1.0/check.json';
 const BLOCKED_IMG = "https://i.redd.it/58qnz74nf5j41.png";
+
 let uploadCooldowns = {}; 
 const COOLDOWN_NORMAL = 15000;
 const COOLDOWN_PENALTY = 60000;
@@ -49,63 +47,37 @@ const TAG_COOLDOWN = 1000;
 let lastWolfMoveTime = Date.now();
 
 
-// --- ROUTES D'AUTHENTIFICATION (API) ---
-
-// 1. Inscription
+// --- ROUTES AUTH ---
 app.post('/api/register', async (req, res) => {
     const { pseudo, password } = req.body;
-
     if (!pseudo || !password) return res.json({ success: false, message: "Champs manquants." });
-    if (pseudo.length > 12) return res.json({ success: false, message: "Pseudo trop long (max 12)." });
+    if (pseudo.length > 12) return res.json({ success: false, message: "Pseudo trop long." });
 
     try {
-        // Vérifier si le pseudo existe déjà en base
         const existingUser = await User.findOne({ pseudo: { $regex: new RegExp(`^${pseudo}$`, 'i') } });
-        if (existingUser) {
-            return res.json({ success: false, message: "Ce pseudo est déjà pris." });
-        }
+        if (existingUser) return res.json({ success: false, message: "Pseudo pris." });
 
-        // Hasher le mot de passe
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Créer l'utilisateur
         const newUser = new User({ pseudo, password: hashedPassword });
         await newUser.save();
-
-        console.log(`Nouvel utilisateur inscrit : ${pseudo}`);
         res.json({ success: true });
-    } catch (error) {
-        console.error("Erreur Inscription:", error);
-        res.json({ success: false, message: "Erreur serveur." });
-    }
+    } catch (error) { res.json({ success: false, message: "Erreur serveur." }); }
 });
 
-// 2. Connexion
 app.post('/api/login', async (req, res) => {
     const { pseudo, password } = req.body;
-
     try {
-        // Chercher l'utilisateur
         const user = await User.findOne({ pseudo: { $regex: new RegExp(`^${pseudo}$`, 'i') } });
-        if (!user) {
-            return res.json({ success: false, message: "Utilisateur inconnu." });
-        }
+        if (!user) return res.json({ success: false, message: "Utilisateur inconnu." });
 
-        // Vérifier le mot de passe
         const match = await bcrypt.compare(password, user.password);
-        if (match) {
-            res.json({ success: true, pseudo: user.pseudo });
-        } else {
-            res.json({ success: false, message: "Mot de passe incorrect." });
-        }
-    } catch (error) {
-        console.error("Erreur Connexion:", error);
-        res.json({ success: false, message: "Erreur serveur." });
-    }
+        if (match) res.json({ success: true, pseudo: user.pseudo });
+        else res.json({ success: false, message: "Mot de passe incorrect." });
+    } catch (error) { res.json({ success: false, message: "Erreur serveur." }); }
 });
 
 
-// --- SOCKET.IO (JEU) ---
+// --- SOCKET.IO ---
 io.on('connection', (socket) => {
     console.log('Nouveau socket : ' + socket.id);
 
@@ -115,8 +87,6 @@ io.on('connection', (socket) => {
 
     socket.on('joinGame', (pseudoSent) => {
         let finalPseudo = "Invité";
-        
-        // Si le joueur envoie un pseudo (car il s'est connecté), on l'utilise
         if (pseudoSent && typeof pseudoSent === 'string' && pseudoSent.trim().length > 0) {
             finalPseudo = pseudoSent.trim().substring(0, 12);
         } else {
@@ -161,7 +131,7 @@ io.on('connection', (socket) => {
                 if (now - lastTagTime > TAG_COOLDOWN) {
                     wolfId = targetId;
                     lastTagTime = now;
-                    lastWolfMoveTime = Date.now();
+                    lastWolfMoveTime = Date.now(); 
                     io.emit('updateWolf', wolfId);
                     io.emit('playerTagged', { x: target.x + 25, y: target.y + 25, color: target.color });
                 }
@@ -176,11 +146,8 @@ io.on('connection', (socket) => {
             socket.emit('uploadError', `Attends encore ${timeLeft}s.`);
             return;
         }
-
         if (!API_USER || !API_SECRET) {
-            // Pas d'API configurée, on laisse passer (ou on bloque, au choix)
-            // Pour l'instant on simule une erreur
-            socket.emit('uploadError', "Serveur non configuré pour l'analyse.");
+            socket.emit('uploadError', "Analyse d'image désactivée.");
             return;
         }
 
@@ -210,8 +177,7 @@ io.on('connection', (socket) => {
                 }
             }
         } catch (error) {
-            console.error("Erreur API Image:", error.message);
-            socket.emit('uploadError', "Erreur technique analyse image.");
+            socket.emit('uploadError', "Erreur analyse image.");
         }
     });
 
@@ -231,8 +197,10 @@ io.on('connection', (socket) => {
                 if (ids.length > 0) {
                     wolfId = ids[Math.floor(Math.random() * ids.length)];
                     io.emit('updateWolf', wolfId);
+                    lastWolfMoveTime = Date.now();
                 } else {
                     wolfId = null;
+                    io.emit('updateWolf', null);
                 }
             }
         }
@@ -240,19 +208,28 @@ io.on('connection', (socket) => {
     });
 });
 
+// --- GESTION AFK ---
 setInterval(() => {
     const ids = Object.keys(players);
     if (wolfId && ids.length > 1) {
         if (Date.now() - lastWolfMoveTime > 15000) { 
+            console.log(`Loup AFK (${wolfId}) -> Expulsion.`);
+            
+            // 1. On prévient le client
             io.to(wolfId).emit('afkKicked');
-            // La déconnexion sera gérée par le socket.on('disconnect') ou manuellement
-            // removePlayer n'est plus accessible directement ici car hors scope, 
-            // mais on peut forcer la deconnexion socket :
-            // io.sockets.sockets.get(wolfId)?.disconnect();
+            
+            // 2. On attend un tout petit peu (100ms) pour être sûr qu'il reçoive le message
+            setTimeout(() => {
+                const socketDuLoup = io.sockets.sockets.get(wolfId);
+                if (socketDuLoup) {
+                    socketDuLoup.disconnect(true);
+                }
+            }, 100);
         }
     }
 }, 1000);
 
-http.listen(2220, '0.0.0.0', () => {
-    console.log('Serveur lancé sur le port 2220');
+const PORT = process.env.PORT || 2220;
+http.listen(PORT, '0.0.0.0', () => {
+    console.log(`Serveur lancé sur le port ${PORT}`);
 });
