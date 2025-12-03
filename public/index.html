@@ -29,13 +29,13 @@
             font-weight: bold; color: white; text-shadow: 1px 1px 2px black;
         }
         
-        /* --- NOUVEAU CSS POUR LE PSEUDO AU SURVOL --- */
+        /* --- PSEUDO AU SURVOL --- */
         .cube::after {
-            content: attr(data-pseudo); /* Récupère le pseudo stocké */
+            content: attr(data-pseudo);
             position: absolute;
-            bottom: 120%; /* Juste au-dessus du cube */
+            bottom: 120%;
             left: 50%;
-            transform: translateX(-50%); /* Centré */
+            transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.8);
             color: white;
             padding: 4px 8px;
@@ -43,14 +43,11 @@
             font-size: 14px;
             white-space: nowrap;
             pointer-events: none;
-            opacity: 0; /* Caché par défaut */
+            opacity: 0;
             transition: opacity 0.2s;
             z-index: 500;
         }
-        .cube:hover::after {
-            opacity: 1; /* Visible quand on survole */
-        }
-        /* ------------------------------------------ */
+        .cube:hover::after { opacity: 1; }
 
         .wolf {
             border: 5px solid red !important;
@@ -64,13 +61,6 @@
             transition: opacity 0.5s;
         }
         #menu-overlay.hidden { opacity: 0; pointer-events: none; }
-        #play-btn {
-            font-size: 2rem; padding: 20px 40px;
-            background: #4CAF50; color: white; border: none; border-radius: 10px;
-            cursor: pointer; box-shadow: 0 0 15px rgba(76, 175, 80, 0.6);
-            transition: transform 0.2s, background 0.2s;
-        }
-        #play-btn:hover { transform: scale(1.1); background: #45a049; }
         
         #toggle-btn {
             position: fixed; top: 10px; left: 10px; z-index: 2000;
@@ -104,12 +94,32 @@
 <div id="global-msg"></div>
 
 <div id="menu-overlay">
-    <h1 style="color:white; text-shadow:2px 2px 4px black; margin-bottom: 30px;">CUBE TAG</h1>
-    
-    <input type="text" id="pseudoInput" placeholder="Ton Pseudo..." maxlength="12" 
-           style="padding: 10px; font-size: 1.2rem; border-radius: 10px; border: none; margin-bottom: 20px; text-align: center; width: 200px;">
-    
-    <button id="play-btn" onclick="joinGame()">JOUER</button>
+    <h1 style="color:white; text-shadow:2px 2px 4px black; margin-bottom: 20px;">CUBE TAG</h1>
+
+    <div style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 10px; text-align: center; width: 300px; box-shadow: 0 0 15px rgba(0,0,0,0.5);">
+        
+        <div style="margin-bottom: 15px; display: flex; justify-content: space-around; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+            <button onclick="showForm('login')" id="tab-login" style="background:none; border:none; border-bottom: 3px solid #4CAF50; font-weight:bold; cursor:pointer; font-size: 16px;">CONNEXION</button>
+            <button onclick="showForm('register')" id="tab-register" style="background:none; border:none; color:#777; cursor:pointer; font-size: 16px;">INSCRIPTION</button>
+        </div>
+
+        <div id="form-login">
+            <input type="text" id="loginPseudo" placeholder="Ton Pseudo" style="width: 90%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
+            <input type="password" id="loginPass" placeholder="Mot de passe" style="width: 90%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
+            <button onclick="doLogin()" style="width: 100%; padding: 10px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold;">SE CONNECTER</button>
+        </div>
+
+        <div id="form-register" style="display:none;">
+            <input type="text" id="regPseudo" placeholder="Nouveau Pseudo" maxlength="12" style="width: 90%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
+            <input type="password" id="regPass" placeholder="Mot de passe" style="width: 90%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc;">
+            <button onclick="doRegister()" style="width: 100%; padding: 10px; background: #2196F3; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold;">CRÉER COMPTE</button>
+        </div>
+
+        <div id="auth-msg" style="margin-top: 10px; font-size: 0.9em; font-weight: bold; min-height: 20px;"></div>
+    </div>
+
+    <button onclick="joinGameAsGuest()" style="margin-top: 20px; background: none; border: 1px solid rgba(255,255,255,0.5); color: rgba(255,255,255,0.8); padding: 8px 15px; cursor: pointer; border-radius: 20px;">Jouer en tant qu'invité</button>
+
     <div id="afk-msg" style="color: red; margin-top: 20px; font-weight: bold; display: none;">Vous avez été exclu pour inactivité (AFK)</div>
 </div>
 
@@ -143,31 +153,105 @@
     let fxCanvas, fxCtx, fxParticles = [];
     const gameLayer = document.getElementById('game-layer');
 
-    function initFxCanvas() {
-        fxCanvas = document.createElement('canvas');
-        fxCanvas.style.position = 'absolute';
-        fxCanvas.style.left = '0'; fxCanvas.style.top = '0';
-        fxCanvas.style.width = '100%'; fxCanvas.style.height = '100%';
-        fxCanvas.style.pointerEvents = 'none';
-        fxCanvas.width = window.innerWidth; fxCanvas.height = window.innerHeight;
-        gameLayer.appendChild(fxCanvas);
-        fxCtx = fxCanvas.getContext('2d');
-        window.addEventListener('resize', () => { fxCanvas.width = window.innerWidth; fxCanvas.height = window.innerHeight; });
-        requestAnimationFrame(stepFx);
+    // --- GESTION DE L'INTERFACE (ONGLETS) ---
+    function showForm(type) {
+        document.getElementById('auth-msg').innerText = "";
+        if (type === 'login') {
+            document.getElementById('form-login').style.display = 'block';
+            document.getElementById('form-register').style.display = 'none';
+            document.getElementById('tab-login').style.borderBottom = "3px solid #4CAF50";
+            document.getElementById('tab-login').style.color = "black";
+            document.getElementById('tab-register').style.borderBottom = "none";
+            document.getElementById('tab-register').style.color = "#777";
+        } else {
+            document.getElementById('form-login').style.display = 'none';
+            document.getElementById('form-register').style.display = 'block';
+            document.getElementById('tab-register').style.borderBottom = "3px solid #2196F3";
+            document.getElementById('tab-register').style.color = "black";
+            document.getElementById('tab-login').style.borderBottom = "none";
+            document.getElementById('tab-login').style.color = "#777";
+        }
     }
-    
-    function joinGame() {
-        // --- RECUPERATION DU PSEUDO ---
-        const input = document.getElementById('pseudoInput');
-        const pseudo = input.value; // On envoie tel quel, le serveur gère le reste
 
+    // --- CONNEXION ---
+    async function doLogin() {
+        const pseudo = document.getElementById('loginPseudo').value;
+        const pass = document.getElementById('loginPass').value;
+        const msg = document.getElementById('auth-msg');
+
+        if (!pseudo || !pass) { msg.innerText = "Champs manquants !"; msg.style.color = "orange"; return; }
+
+        msg.innerText = "Connexion...";
+        
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pseudo, password: pass })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                msg.innerText = "Succès !";
+                msg.style.color = "green";
+                launchGame(data.pseudo);
+            } else {
+                msg.innerText = data.message;
+                msg.style.color = "red";
+            }
+        } catch (e) {
+            msg.innerText = "Erreur serveur";
+            msg.style.color = "red";
+        }
+    }
+
+    // --- INSCRIPTION ---
+    async function doRegister() {
+        const pseudo = document.getElementById('regPseudo').value;
+        const pass = document.getElementById('regPass').value;
+        const msg = document.getElementById('auth-msg');
+
+        if (!pseudo || !pass) { msg.innerText = "Champs manquants !"; msg.style.color = "orange"; return; }
+
+        msg.innerText = "Création du compte...";
+
+        try {
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pseudo, password: pass })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                msg.innerText = "Compte créé ! Connecte-toi maintenant.";
+                msg.style.color = "green";
+                showForm('login');
+                document.getElementById('loginPseudo').value = pseudo;
+            } else {
+                msg.innerText = data.message;
+                msg.style.color = "red";
+            }
+        } catch (e) {
+            msg.innerText = "Erreur serveur";
+            msg.style.color = "red";
+        }
+    }
+
+    // --- INVITE ---
+    function joinGameAsGuest() {
+        launchGame(""); // Pseudo vide = le serveur génère "CubeXXX"
+    }
+
+    // --- LANCEMENT DU JEU ---
+    function launchGame(pseudo) {
         document.getElementById('menu-overlay').classList.add('hidden');
         document.getElementById('game-layer').classList.remove('blurred');
         document.getElementById('toggle-btn').style.display = 'block';
         document.getElementById('ui-container').style.display = 'flex';
         document.getElementById('afk-msg').style.display = 'none';
         
-        // Envoi de l'event joinGame avec le pseudo
+        // Envoi de l'event joinGame avec le pseudo authentifié
         socket.emit('joinGame', pseudo);
         isPlaying = true;
     }
@@ -180,6 +264,21 @@
         document.getElementById('ui-container').style.display = 'none';
         document.getElementById('ui-container').classList.remove('hidden'); 
         if (reason === 'afk') document.getElementById('afk-msg').style.display = 'block';
+    }
+
+    // --- LOGIQUE JEU (Reste inchangée) ---
+
+    function initFxCanvas() {
+        fxCanvas = document.createElement('canvas');
+        fxCanvas.style.position = 'absolute';
+        fxCanvas.style.left = '0'; fxCanvas.style.top = '0';
+        fxCanvas.style.width = '100%'; fxCanvas.style.height = '100%';
+        fxCanvas.style.pointerEvents = 'none';
+        fxCanvas.width = window.innerWidth; fxCanvas.height = window.innerHeight;
+        gameLayer.appendChild(fxCanvas);
+        fxCtx = fxCanvas.getContext('2d');
+        window.addEventListener('resize', () => { fxCanvas.width = window.innerWidth; fxCanvas.height = window.innerHeight; });
+        requestAnimationFrame(stepFx);
     }
 
     socket.on('uploadError', (message) => {
