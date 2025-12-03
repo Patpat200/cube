@@ -28,32 +28,16 @@
             display: flex; justify-content: center; align-items: center; 
             font-weight: bold; color: white; text-shadow: 1px 1px 2px black;
         }
-        
-        /* --- PSEUDO AU SURVOL --- */
         .cube::after {
             content: attr(data-pseudo);
-            position: absolute;
-            bottom: 120%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 14px;
-            white-space: nowrap;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-            z-index: 500;
+            position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8); color: white; padding: 4px 8px;
+            border-radius: 4px; font-size: 14px; white-space: nowrap; pointer-events: none;
+            opacity: 0; transition: opacity 0.2s; z-index: 500;
         }
         .cube:hover::after { opacity: 1; }
-
-        .wolf {
-            border: 5px solid red !important;
-            box-shadow: 0 0 20px red !important;
-            z-index: 100;
-        }
+        .wolf { border: 5px solid red !important; box-shadow: 0 0 20px red !important; z-index: 100; }
+        
         #menu-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -78,7 +62,6 @@
         #ui-container.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
         button { cursor: pointer; padding: 5px 10px; }
         
-        /* Message Global */
         #global-msg {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             padding: 10px 20px; border-radius: 5px; color: white; font-weight: bold;
@@ -90,14 +73,11 @@
 <body>
 
 <div id="game-layer" class="blurred"></div>
-
 <div id="global-msg"></div>
 
 <div id="menu-overlay">
     <h1 style="color:white; text-shadow:2px 2px 4px black; margin-bottom: 20px;">CUBE TAG</h1>
-
     <div style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 10px; text-align: center; width: 300px; box-shadow: 0 0 15px rgba(0,0,0,0.5);">
-        
         <div style="margin-bottom: 15px; display: flex; justify-content: space-around; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
             <button onclick="showForm('login')" id="tab-login" style="background:none; border:none; border-bottom: 3px solid #4CAF50; font-weight:bold; cursor:pointer; font-size: 16px;">CONNEXION</button>
             <button onclick="showForm('register')" id="tab-register" style="background:none; border:none; color:#777; cursor:pointer; font-size: 16px;">INSCRIPTION</button>
@@ -117,9 +97,7 @@
 
         <div id="auth-msg" style="margin-top: 10px; font-size: 0.9em; font-weight: bold; min-height: 20px;"></div>
     </div>
-
     <button onclick="joinGameAsGuest()" style="margin-top: 20px; background: none; border: 1px solid rgba(255,255,255,0.5); color: rgba(255,255,255,0.8); padding: 8px 15px; cursor: pointer; border-radius: 20px;">Jouer en tant qu'invité</button>
-
     <div id="afk-msg" style="color: red; margin-top: 20px; font-weight: bold; display: none;">Vous avez été exclu pour inactivité (AFK)</div>
 </div>
 
@@ -129,7 +107,6 @@
     <div style="font-size: 10px; color: #555; margin-bottom: 5px;">(Cooldown: 15s)</div>
     <input type="file" id="fileInput" accept="image/*">
     <button onclick="uploadImage()">Envoyer l'image</button>
-
     <hr style="width: 100%; border: 1px solid #ccc; margin: 5px 0;">
     <label><strong>Ma Couleur :</strong></label>
     <div style="display: flex; gap: 5px; align-items: center;">
@@ -143,8 +120,8 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
-    const playersDOM = {};
-    const playersData = {};
+    let playersDOM = {};
+    let playersData = {};
     const cubeSize = 50;
     let myId = null, myX = 0, myY = 0, currentWolfId = null, isPlaying = false;
     const keysPressed = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
@@ -153,7 +130,6 @@
     let fxCanvas, fxCtx, fxParticles = [];
     const gameLayer = document.getElementById('game-layer');
 
-    // --- GESTION DE L'INTERFACE (ONGLETS) ---
     function showForm(type) {
         document.getElementById('auth-msg').innerText = "";
         if (type === 'login') {
@@ -173,16 +149,12 @@
         }
     }
 
-    // --- CONNEXION ---
     async function doLogin() {
         const pseudo = document.getElementById('loginPseudo').value;
         const pass = document.getElementById('loginPass').value;
         const msg = document.getElementById('auth-msg');
-
         if (!pseudo || !pass) { msg.innerText = "Champs manquants !"; msg.style.color = "orange"; return; }
-
         msg.innerText = "Connexion...";
-        
         try {
             const res = await fetch('/api/login', {
                 method: 'POST',
@@ -190,31 +162,17 @@
                 body: JSON.stringify({ pseudo, password: pass })
             });
             const data = await res.json();
-
-            if (data.success) {
-                msg.innerText = "Succès !";
-                msg.style.color = "green";
-                launchGame(data.pseudo);
-            } else {
-                msg.innerText = data.message;
-                msg.style.color = "red";
-            }
-        } catch (e) {
-            msg.innerText = "Erreur serveur";
-            msg.style.color = "red";
-        }
+            if (data.success) { msg.innerText = "Succès !"; msg.style.color = "green"; launchGame(data.pseudo); }
+            else { msg.innerText = data.message; msg.style.color = "red"; }
+        } catch (e) { msg.innerText = "Erreur serveur"; msg.style.color = "red"; }
     }
 
-    // --- INSCRIPTION ---
     async function doRegister() {
         const pseudo = document.getElementById('regPseudo').value;
         const pass = document.getElementById('regPass').value;
         const msg = document.getElementById('auth-msg');
-
         if (!pseudo || !pass) { msg.innerText = "Champs manquants !"; msg.style.color = "orange"; return; }
-
-        msg.innerText = "Création du compte...";
-
+        msg.innerText = "Création...";
         try {
             const res = await fetch('/api/register', {
                 method: 'POST',
@@ -222,42 +180,52 @@
                 body: JSON.stringify({ pseudo, password: pass })
             });
             const data = await res.json();
-
             if (data.success) {
-                msg.innerText = "Compte créé ! Connecte-toi maintenant.";
-                msg.style.color = "green";
-                showForm('login');
-                document.getElementById('loginPseudo').value = pseudo;
-            } else {
-                msg.innerText = data.message;
-                msg.style.color = "red";
-            }
-        } catch (e) {
-            msg.innerText = "Erreur serveur";
-            msg.style.color = "red";
-        }
+                msg.innerText = "Compte créé !"; msg.style.color = "green";
+                showForm('login'); document.getElementById('loginPseudo').value = pseudo;
+            } else { msg.innerText = data.message; msg.style.color = "red"; }
+        } catch (e) { msg.innerText = "Erreur serveur"; msg.style.color = "red"; }
     }
 
-    // --- INVITE ---
-    function joinGameAsGuest() {
-        launchGame(""); // Pseudo vide = le serveur génère "CubeXXX"
-    }
+    function joinGameAsGuest() { launchGame(""); }
 
-    // --- LANCEMENT DU JEU ---
+    // --- CORRECTION MAJEURE ICI ---
     function launchGame(pseudo) {
+        // Reset UI
         document.getElementById('menu-overlay').classList.add('hidden');
         document.getElementById('game-layer').classList.remove('blurred');
         document.getElementById('toggle-btn').style.display = 'block';
         document.getElementById('ui-container').style.display = 'flex';
         document.getElementById('afk-msg').style.display = 'none';
-        
-        // Envoi de l'event joinGame avec le pseudo authentifié
-        socket.emit('joinGame', pseudo);
-        isPlaying = true;
+
+        // VERIFICATION DE LA CONNEXION
+        if (socket.connected) {
+            // Si déjà connecté, on envoie direct
+            socket.emit('joinGame', pseudo);
+            isPlaying = true;
+        } else {
+            // Si déconnecté (ex: après un kick), on reconnecte d'abord
+            console.log("Socket déconnecté, tentative de reconnexion...");
+            socket.connect(); 
+            
+            // On attend que la connexion soit établie avant d'envoyer joinGame
+            socket.once('connect', () => {
+                console.log("Reconnecté ! Envoi des infos...");
+                socket.emit('joinGame', pseudo);
+                isPlaying = true;
+            });
+        }
     }
 
     function returnToMenu(reason = "") {
         isPlaying = false; myId = null;
+        
+        // NETTOYAGE COMPLET DES CUBES
+        for (let id in playersDOM) { playersDOM[id].remove(); }
+        playersDOM = {};
+        playersData = {};
+        currentWolfId = null;
+
         document.getElementById('menu-overlay').classList.remove('hidden');
         document.getElementById('game-layer').classList.add('blurred');
         document.getElementById('toggle-btn').style.display = 'none';
@@ -266,12 +234,9 @@
         if (reason === 'afk') document.getElementById('afk-msg').style.display = 'block';
     }
 
-    // --- LOGIQUE JEU (Reste inchangée) ---
-
     function initFxCanvas() {
         fxCanvas = document.createElement('canvas');
-        fxCanvas.style.position = 'absolute';
-        fxCanvas.style.left = '0'; fxCanvas.style.top = '0';
+        fxCanvas.style.position = 'absolute'; fxCanvas.style.left = '0'; fxCanvas.style.top = '0';
         fxCanvas.style.width = '100%'; fxCanvas.style.height = '100%';
         fxCanvas.style.pointerEvents = 'none';
         fxCanvas.width = window.innerWidth; fxCanvas.height = window.innerHeight;
@@ -281,11 +246,8 @@
         requestAnimationFrame(stepFx);
     }
 
-    socket.on('uploadError', (message) => {
-        alert("⛔ " + message);
-        document.getElementById('status').innerText = message;
-    });
-
+    socket.on('uploadError', (message) => { alert("⛔ " + message); document.getElementById('status').innerText = message; });
+    
     socket.on('serverMessage', (data) => {
         const msgDiv = document.getElementById('global-msg');
         msgDiv.innerText = data.text;
@@ -301,7 +263,11 @@
         playersData[myId] = { serverX: info.x, serverY: info.y, displayX: info.x, displayY: info.y, color: info.color };
         createCube(myId, info);
     });
+
     socket.on('afkKicked', () => returnToMenu('afk'));
+
+    // SECURITE : Si déconnecté, retour menu immédiat
+    socket.on('disconnect', () => { if (isPlaying) returnToMenu(); });
     
     socket.on('currentPlayers', (serverPlayers) => {
         Object.keys(serverPlayers).forEach((id) => {
@@ -339,16 +305,12 @@
     socket.on('playerTagged', (data) => { spawnParticles(data.x, data.y, data.color, 30); });
 
     function createCube(id, info) {
+        if (playersDOM[id]) return; // Evite doublons
         const cube = document.createElement('div');
         cube.classList.add('cube'); cube.id = id;
         cube.style.backgroundColor = info.color;
         cube.style.transform = `translate3d(${info.x}px, ${info.y}px, 0)`;
-        
-        // --- AJOUT ATTRIBUT PSEUDO ---
-        if (info.pseudo) {
-            cube.setAttribute('data-pseudo', info.pseudo);
-        }
-        
+        if (info.pseudo) cube.setAttribute('data-pseudo', info.pseudo);
         gameLayer.appendChild(cube);
         playersDOM[id] = cube;
     }
@@ -429,7 +391,6 @@
             alert("Sélectionne un fichier !");
         }
     }
-
     function changeColor() { socket.emit('changeColor', document.getElementById('colorInput').value); }
     document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h' && document.activeElement.tagName !== 'INPUT') toggleUI(); if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = true; });
     document.addEventListener('keyup', (e) => { if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = false; });
