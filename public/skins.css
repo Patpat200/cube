@@ -4,6 +4,11 @@
     cursor: pointer;
 }
 
+/* Petit ajustement quand on survole : on cache le pseudo sous le chapeau */
+.skin-tophat:hover::after {
+    z-index: 200; /* L'infobulle passe devant le chapeau */
+}
+
 /* Infobulle */
 .skin-icon::after {
     content: attr(data-name);
@@ -213,4 +218,57 @@
 /* Petit ajustement quand on survole : on cache le pseudo sous le chapeau */
 .skin-tophat:hover::after {
     z-index: 200; /* L'infobulle passe devant le chapeau */
+}
+
+
+
+
+
+
+/* --- SKIN KAWAII CAT (Oreilles + Visage) --- */
+
+/* Le corps du cube avec le visage (Yeux + Blush) */
+.skin-kawaii-cat {
+    /* Fond rose pastel */
+    background-color: #ffb6c1;
+    /* Bordure rose plus foncé */
+    border: 2px solid #ff69b4;
+    /* Arrondi pour le côté mignon */
+    border-radius: 8px;
+
+    /* DESSIN DU VISAGE (Yeux + Blush) via background-image */
+    background-image: 
+        /* Oeil Gauche (Petit rond gris foncé) */
+        radial-gradient(circle at 16px 24px, #444 3px, transparent 4px),
+        /* Oeil Droit */
+        radial-gradient(circle at 34px 24px, #444 3px, transparent 4px),
+        
+        /* Blush Gauche (Rond rose transparent) */
+        radial-gradient(circle at 10px 32px, rgba(255, 105, 180, 0.7) 5px, transparent 6px),
+        /* Blush Droit */
+        radial-gradient(circle at 40px 32px, rgba(255, 105, 180, 0.7) 5px, transparent 6px);
+    
+    /* On s'assure que le fond ne se répète pas */
+    background-repeat: no-repeat;
+}
+
+/* Les oreilles (Reste inchangé) */
+.skin-kawaii-cat::before {
+    content: "";
+    position: absolute;
+    bottom: 50px; /* Au-dessus du cube */
+    left: 4px;    /* Position gauche */
+
+    /* Triangle pour l'oreille gauche */
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 15px solid #ff69b4; /* Couleur des oreilles */
+    
+    /* L'oreille droite est créée par l'ombre portée (drop-shadow) */
+    filter: drop-shadow(22px 0 0 #ff69b4);
+
+    z-index: 150;
+    pointer-events: none;
 }

@@ -84,6 +84,14 @@ const ACHIEVEMENTS = [
         rewardSkin: 'skin-snow',  // <-- Le nom de la classe CSS
         skinName: 'Hiver Éternel' 
     },
+    { 
+        id: 'cat', 
+        name: 'Chat Kawaii', 
+        desc: 'Rejoindre 1000 parties', 
+        condition: (u) => u.gamesJoined >= 1000, 
+        rewardSkin: 'skin-kawaii-cat',  // <-- Le nom de la classe CSS
+        skinName: 'Chat Kawaii' 
+    },
 ];
 
 // 2. CODES SECRETS
@@ -117,7 +125,7 @@ const SECRET_CODES = {
         name: 'Plasma Gratuit'
     },
     "GENTLEMAN": {
-        skin: 'skin-tophat', // Le nom de la classe CSS qu'on vient de créer
+        skin: 'skin-tophat',
         name: 'Le Chic'
     }
 };
