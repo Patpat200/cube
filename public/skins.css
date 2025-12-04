@@ -1,62 +1,51 @@
 /* L'élément parent (le skin) doit être en position relative */
 .skin-icon {
-    position: relative; /* Important pour que le nom s'ancre au skin */
+    position: relative;
     cursor: pointer;
 }
 
-/* Le style de l'infobulle (cachée par défaut) */
+/* Infobulle */
 .skin-icon::after {
-    content: attr(data-name); /* Récupère le texte du HTML ! */
-    
-    /* Positionnement */
+    content: attr(data-name);
     position: absolute;
-    bottom: 120%; /* S'affiche juste au-dessus du skin */
+    bottom: 120%;
     left: 50%;
-    transform: translateX(-50%); /* Pour centrer parfaitement le texte */
-    
-    /* Apparence */
-    background-color: rgba(0, 0, 0, 0.8); /* Fond noir semi-transparent */
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
     color: white;
     padding: 5px 10px;
     border-radius: 5px;
     font-size: 14px;
-    white-space: nowrap; /* Empêche le texte de passer à la ligne */
-    pointer-events: none; /* La souris passe au travers */
-    z-index: 100; /* S'assure que le texte passe au-dessus de tout */
-    
-    /* Animation d'apparition */
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 100;
     opacity: 0; 
     transition: opacity 0.2s ease;
     visibility: hidden;
 }
 
-/* On ajoute une petite flèche en bas (optionnel, pour le style) */
 .skin-icon::before {
     content: "";
     position: absolute;
-    bottom: 110%; /* Juste en dessous du texte */
+    bottom: 110%;
     left: 50%;
     transform: translateX(-50%);
     border-width: 5px;
     border-style: solid;
     border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
-    
     opacity: 0;
     transition: opacity 0.2s ease;
     visibility: hidden;
 }
 
-/* L'apparition au survol */
 .skin-icon:hover::after,
 .skin-icon:hover::before {
     opacity: 1;
     visibility: visible;
-    bottom: 125%; /* Petit mouvement vers le haut sympa */
+    bottom: 125%;
 }
 
-
-
-/* --- SKIN: RAINBOW (Animation de couleur) --- */
+/* --- SKIN: RAINBOW --- */
 @keyframes rainbow {
     0% { background: #ff0000; }
     20% { background: #ffff00; }
@@ -70,7 +59,7 @@
     border: 2px solid white;
 }
 
-/* --- SKIN: GLITCH (Effet buggé) --- */
+/* --- SKIN: GLITCH --- */
 .skin-glitch {
     background: repeating-linear-gradient(
         45deg,
@@ -83,28 +72,145 @@
     box-shadow: 0 0 5px #0f0;
 }
 
-
-
-/* --- SKIN: PULSE (Ça respire) --- */
-/* Dans skins.css */
-
+/* --- SKIN: PULSE --- */
 .skin-pulse {
-    background-color: #ff0055; /* Couleur de base */
+    background-color: #ff0055;
     border-radius: 5px;
-    /* IMPORTANT : On ne met PAS de transform ici */
     animation: pulse-effect 1.5s infinite;
 }
-
 @keyframes pulse-effect {
-    0% {
-        /* Au début : pas d'ombre */
-        box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7);
+    0% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7); }
+    70% { box-shadow: 0 0 0 15px rgba(255, 0, 85, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); }
+}
+
+/* --- NOUVEAU : SKIN PLASMA (Fluide) --- */
+.skin-plasma {
+    background: linear-gradient(124deg, #ff2400, #e81d1d, #e8b71d, #e3e81d, #1de840, #1ddde8, #2b1de8, #dd00f3, #dd00f3);
+    background-size: 1800% 1800%;
+    animation: plasma-anim 5s ease infinite;
+    border: 1px solid white;
+}
+@keyframes plasma-anim {
+    0%{background-position:0% 82%}
+    50%{background-position:100% 19%}
+    100%{background-position:0% 82%}
+}
+
+/* --- NOUVEAU : SKIN NÉON (Bordure) --- */
+.skin-neon {
+    background-color: #222;
+    border: 2px solid #fff;
+    animation: neon-glow 1.5s ease-in-out infinite alternate;
+}
+@keyframes neon-glow {
+    from {
+        box-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #0073e6, 0 0 20px #0073e6;
+        border-color: #fff;
     }
-    70% {
-        /* À 70% : L'ombre s'est écartée de 15px et devient transparente */
-        box-shadow: 0 0 0 15px rgba(255, 0, 85, 0);
+    to {
+        box-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #0073e6, 0 0 40px #0073e6;
+        border-color: #0073e6;
+    }
+}
+
+
+
+
+/* --- NOUVEAU : SKIN FLOCONS DE NEIGE --- */
+.skin-snow {
+    /* Couleur de fond bleu glacé */
+    background-color: #a0d8ef;
+    
+    /* On crée les flocons avec deux couches de dégradés radiaux (des ronds blancs).
+       Couche 1 : petits flocons nets
+       Couche 2 : flocons un peu plus gros et plus transparents
+    */
+    background-image: 
+        radial-gradient(rgba(255, 255, 255, 0.9) 2px, transparent 3px),
+        radial-gradient(rgba(255, 255, 255, 0.6) 3px, transparent 4px);
+        
+    /* Taille des tuiles qui se répètent. Important pour la boucle d'animation. */
+    background-size: 30px 30px, 50px 50px;
+    
+    /* Positions de départ décalées pour les deux couches */
+    background-position: 0 0, 15px 15px;
+    
+    /* L'animation : nom, durée, linéaire (vitesse constante), infinie */
+    animation: falling-snow-anim 2.5s linear infinite;
+    
+    /* Une bordure blanche pour finir le look */
+    border: 2px solid white;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+/* La définition de l'animation qui fait tomber la neige */
+@keyframes falling-snow-anim {
+    0% {
+        background-position: 0 0, 15px 15px;
     }
     100% {
-        box-shadow: 0 0 0 0 rgba(255, 0, 85, 0);
+        /* Pour que la boucle soit parfaite, on déplace le fond vers le bas
+           d'une valeur exactement égale à la hauteur définie dans background-size.
+           Couche 1 : descend de 30px
+           Couche 2 : descend de 50px (15 + 50 = 65)
+        */
+        background-position: 0 30px, 15px 65px;
     }
+}
+
+
+
+
+/* --- NOUVEAU : SKIN HAUT-DE-FORME (TOP HAT) --- */
+
+/* Le corps du cube (le "costume") */
+.skin-tophat {
+    /* Couleur de base du cube (gris costume) */
+    background: #444;
+    /* Une petite bordure noire pour le style */
+    border: 2px solid #222;
+}
+
+/* Le Chapeau lui-même (Pseudo-élément) */
+.skin-tophat::before {
+    content: ""; /* Nécessaire pour afficher le pseudo-élément */
+    position: absolute;
+    
+    /* POSITIONNEMENT : Au-dessus du cube */
+    /* Le cube fait 50px de haut. On place le bas du chapeau à 50px du bas du cube. */
+    bottom: 50px; 
+    /* Centrage horizontal */
+    left: 50%;
+    transform: translateX(-50%); /* On recule de 50% de la largeur du chapeau pour le centrer parfaitement */
+    
+    /* DESIGN DU CHAPEAU */
+    /* Partie haute (la couronne) */
+    width: 30px;
+    height: 25px;
+    
+    /* Astuce CSS : Un dégradé pour faire le chapeau noir ET la bande rouge d'un coup */
+    background: linear-gradient(to top, crimson 5px, #111 5px);
+    
+    /* Le rebord du chapeau (le "brim") est fait avec une grosse bordure inférieure */
+    border-bottom: 6px solid #111;
+    
+    /* "content-box" permet à la bordure et au padding de s'ajouter à la largeur */
+    box-sizing: content-box;
+    /* On ajoute du "rembourrage" sur les côtés pour que le bord soit plus large que le haut */
+    padding: 0 8px;
+    
+    /* Une petite ombre pour donner du volume */
+    filter: drop-shadow(0 3px 3px rgba(0,0,0,0.4));
+    
+    /* S'assurer que le chapeau passe devant les autres éléments si besoin */
+    z-index: 150;
+    
+    /* Pour éviter que le chapeau ne bloque les clics (optionnel ici car il est hors hitbox, mais bonne pratique) */
+    pointer-events: none;
+}
+
+/* Petit ajustement quand on survole : on cache le pseudo sous le chapeau */
+.skin-tophat:hover::after {
+    z-index: 200; /* L'infobulle passe devant le chapeau */
 }

@@ -1,7 +1,6 @@
 // --- CONFIGURATION DU JEU (Succès & Codes) ---
 
 // 1. LISTE DES SUCCÈS
-// Pour en rajouter, copie un bloc et change l'id, le nom, et la condition.
 const ACHIEVEMENTS = [
     { 
         id: 'first_blood', 
@@ -19,6 +18,15 @@ const ACHIEVEMENTS = [
         rewardSkin: 'linear-gradient(45deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)', 
         skinName: 'Aube' 
     },
+    // NOUVEAU SUCCÈS
+    {
+        id: 'master_hunter',
+        name: 'Maître Chasseur',
+        desc: 'Infliger 50 tags',
+        condition: (u) => u.tagsInflicted >= 50,
+        rewardSkin: 'skin-neon', // CSS class
+        skinName: 'Néon Futuriste'
+    },
     { 
         id: 'traveler', 
         name: 'Voyageur', 
@@ -34,6 +42,15 @@ const ACHIEVEMENTS = [
         condition: (u) => u.distanceTraveled >= 20000, 
         rewardSkin: 'linear-gradient(to right, #f12711, #f5af19)', 
         skinName: 'Feu' 
+    },
+    // NOUVEAU SUCCÈS
+    {
+        id: 'veteran',
+        name: 'Vétéran',
+        desc: 'Parcourir 1 000 000px',
+        condition: (u) => u.distanceTraveled >= 1000000,
+        rewardSkin: 'skin-plasma', // CSS class
+        skinName: 'Plasma Fluide'
     },
     { 
         id: 'architect', 
@@ -54,15 +71,22 @@ const ACHIEVEMENTS = [
     { 
         id: 'god_mode', 
         name: 'Dieu du jeu', 
-        desc: 'Tout débloquer', 
+        desc: 'Tout débloquer (Impossible)', 
         condition: (u) => false, 
-        rewardSkin: 'skin-rainbow', // Récompense CSS
+        rewardSkin: 'skin-rainbow', 
         skinName: 'Lumière Divine' 
-    }
+    },
+    { 
+        id: 'white_walker', 
+        name: 'Marcheur Blanc', 
+        desc: 'Parcourir 2 000 000px', 
+        condition: (u) => u.distanceTraveled >= 2000000, 
+        rewardSkin: 'skin-snow',  // <-- Le nom de la classe CSS
+        skinName: 'Hiver Éternel' 
+    },
 ];
 
-// 2. CODES SECRETS (Pour toi ou des événements)
-// Ajoute ici des codes que les joueurs peuvent entrer pour gagner un skin direct.
+// 2. CODES SECRETS
 const SECRET_CODES = {
     "PATPAT": { 
         skin: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
@@ -77,7 +101,7 @@ const SECRET_CODES = {
         name: 'Or Massif'
     },
     "RAINBOW": { 
-        skin: 'skin-rainbow', // Doit correspondre à .skin-rainbow dans le CSS
+        skin: 'skin-rainbow', 
         name: 'Arc-en-ciel' 
     },
     "MATRIX": { 
@@ -87,6 +111,14 @@ const SECRET_CODES = {
     "BOOM": {
         skin: 'skin-pulse',
         name: 'Pulsation'
+    },
+    "PLASMA": {
+        skin: 'skin-plasma',
+        name: 'Plasma Gratuit'
+    },
+    "GENTLEMAN": {
+        skin: 'skin-tophat', // Le nom de la classe CSS qu'on vient de créer
+        name: 'Le Chic'
     }
 };
 

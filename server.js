@@ -12,7 +12,24 @@ const jwt = require('jsonwebtoken');
 
 const { ACHIEVEMENTS, SECRET_CODES } = require('./gameConfig');
 
-// SÉCURITÉ : Clé secrète (A mettre dans .env en prod)
+// --- GÉNÉRATION DYNAMIQUE DES NOMS DE SKINS ---
+// On crée un dictionnaire { "valeur_css": "Nom du skin" }
+const ALL_SKIN_NAMES = {};
+
+// 1. Depuis les succès
+ACHIEVEMENTS.forEach(ach => {
+    if (ach.rewardSkin && ach.skinName) {
+        ALL_SKIN_NAMES[ach.rewardSkin] = ach.skinName;
+    }
+});
+
+// 2. Depuis les codes secrets
+Object.values(SECRET_CODES).forEach(code => {
+    if (code.skin && code.name) {
+        ALL_SKIN_NAMES[code.skin] = code.name;
+    }
+});
+
 const JWT_SECRET = process.env.JWT_SECRET || "CHANGE_MOI_IMMEDIATEMENT_POUR_SECURISE";
 
 // --- CONNEXION MONGODB ---
@@ -23,15 +40,13 @@ mongoose.connect(process.env.MONGO_URI)
 // --- MODÈLE UTILISATEUR ---
 const UserSchema = new mongoose.Schema({
     pseudo: { type: String, unique: true, required: true },
-    password: { type: String, required: true }, // Sera exclu des requêtes publiques
+    password: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
-    // Stats
     tagsInflicted: { type: Number, default: 0 },
     timesTagged: { type: Number, default: 0 },
     gamesJoined: { type: Number, default: 0 },
     distanceTraveled: { type: Number, default: 0 },
     backgroundsChanged: { type: Number, default: 0 },
-    // Customisation & Succès
     currentSkin: { type: String, default: null },
     achievements: { type: [String], default: [] }, 
     unlockedSkins: { type: [String], default: [] },
@@ -87,16 +102,13 @@ async function checkAchievements(user, socketId) {
     }
 }
 
-// --- HELPER: MIDDLEWARE AUTH API (EXPRESS) ---
-// Vérifie le token pour les routes HTTP comme /api/me
+// --- HELPER: MIDDLEWARE AUTH API ---
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // "Bearer TOKEN"
-    
-    if (!token) return res.sendStatus(401); // Pas de token
-
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.sendStatus(401);
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403); // Token invalide
+        if (err) return res.sendStatus(403);
         req.user = user;
         next();
     });
@@ -108,7 +120,6 @@ app.post('/api/register', async (req, res) => {
     const { pseudo, password } = req.body;
     if (!pseudo || !password) return res.json({ success: false, message: "Champs manquants." });
     if (pseudo.length > 12) return res.json({ success: false, message: "Pseudo trop long." });
-
     try {
         const existingUser = await User.findOne({ pseudo: { $regex: new RegExp(`^${pseudo}$`, 'i') } });
         if (existingUser) return res.json({ success: false, message: "Pseudo pris." });
@@ -124,61 +135,44 @@ app.post('/api/login', async (req, res) => {
     try {
         const user = await User.findOne({ pseudo: { $regex: new RegExp(`^${pseudo}$`, 'i') } });
         if (!user) return res.json({ success: false, message: "Utilisateur inconnu." });
-        
         const match = await bcrypt.compare(password, user.password);
         if (match) {
-            // Token valide 7 jours
             const token = jwt.sign({ id: user._id, pseudo: user.pseudo }, JWT_SECRET, { expiresIn: '7d' });
-            // On ne renvoie PLUS le pseudo ici si on veut forcer l'usage du token, 
-            // mais c'est pratique pour l'UI immédiate.
             res.json({ success: true, token: token, pseudo: user.pseudo });
         }
         else res.json({ success: false, message: "Mot de passe incorrect." });
     } catch (error) { res.json({ success: false, message: "Erreur serveur." }); }
 });
 
-// NOUVELLE ROUTE : Récupérer son profil via le Token
 app.get('/api/me', authenticateToken, async (req, res) => {
-    // req.user contient {id, pseudo} décodé du token
     try {
-        // On récupère les infos fraîches, SANS le mot de passe
         const user = await User.findById(req.user.id).select('-password -__v');
         if (!user) return res.sendStatus(404);
         res.json({ success: true, pseudo: user.pseudo, stats: user });
-    } catch (e) {
-        res.sendStatus(500);
-    }
+    } catch (e) { res.sendStatus(500); }
 });
 
-// SÉCURISÉ : On exclut le mot de passe hashé
 app.get('/api/stats/:pseudo', async (req, res) => {
     try {
-        // CORRECTION IMPORTANTE : .select('-password')
         const user = await User.findOne({ pseudo: req.params.pseudo }).select('-password -__v -_id');
-        
         if (!user) return res.json({ success: false });
-        
-        // Calcul du ratio
         const ratio = user.timesTagged === 0 ? user.tagsInflicted : (user.tagsInflicted / user.timesTagged).toFixed(2);
-        
-        // On convertit en objet JS simple et on ajoute le ratio
         const statsObj = user.toObject();
         statsObj.ratio = ratio;
         statsObj.distanceTraveled = Math.round(statsObj.distanceTraveled || 0);
-
         res.json({ success: true, stats: statsObj });
     } catch (e) { res.json({ success: false }); }
 });
 
 app.get('/api/leaderboard', async (req, res) => {
     try {
-        // Ici on sélectionnait déjà uniquement pseudo et tags, donc c'était safe, mais on garde
         const hunters = await User.find().sort({ tagsInflicted: -1 }).limit(10).select('pseudo tagsInflicted');
         const travelers = await User.find().sort({ distanceTraveled: -1 }).limit(10).select('pseudo distanceTraveled');
         res.json({ success: true, hunters, travelers });
     } catch (e) { res.json({ success: false }); }
 });
 
+// ROUTE MISE À JOUR : Renvoie aussi la map des noms de skins
 app.get('/api/my-achievements/:pseudo', async (req, res) => {
     try {
         const user = await User.findOne({ pseudo: req.params.pseudo }).select('achievements unlockedSkins');
@@ -188,25 +182,26 @@ app.get('/api/my-achievements/:pseudo', async (req, res) => {
             id: ach.id,
             name: ach.name,
             desc: ach.desc,
-            skinName: ach.skinName,
-            rewardSkin: ach.rewardSkin,
-            unlocked: user.achievements.includes(ach.id)
+            unlocked: user.achievements.includes(ach.id),
+            // On renvoie aussi le skin associé pour l'affichage
+            rewardSkin: ach.rewardSkin
         }));
         
-        res.json({ success: true, achievements: list, unlockedSkins: user.unlockedSkins });
+        res.json({ 
+            success: true, 
+            achievements: list, 
+            unlockedSkins: user.unlockedSkins,
+            skinMap: ALL_SKIN_NAMES // <-- LE DICCO MAGIQUE
+        });
     } catch (e) { res.json({ success: false }); }
 });
 
 // --- SOCKET.IO ---
-
-// Helper pour retirer un joueur proprement
 async function removePlayerFromGame(socketId) {
     if (players[socketId]) {
         const p = players[socketId];
-        // Sauvegarde stats si authentifié
         if (p.pendingDistance > 0 && p.pseudo !== "Invité" && !p.pseudo.startsWith("Cube")) {
             try {
-                // On utilise le pseudo du joueur pour retrouver son compte
                 const user = await User.findOne({ pseudo: p.pseudo });
                 if(user) {
                     user.distanceTraveled = (user.distanceTraveled || 0) + Math.round(p.pendingDistance);
@@ -215,10 +210,8 @@ async function removePlayerFromGame(socketId) {
                 }
             } catch(e) { console.error(e); }
         }
-
         delete players[socketId];
         io.emit('playerDisconnected', socketId); 
-
         if (socketId === wolfId) {
             const ids = Object.keys(players);
             if (ids.length > 0) {
@@ -233,39 +226,28 @@ async function removePlayerFromGame(socketId) {
     }
 }
 
-// MIDDLEWARE AUTH SOCKET (Vérifie Token JWT)
 io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     if (token) {
         jwt.verify(token, JWT_SECRET, (err, decoded) => {
-            if (err) {
-                socket.user = null; // Token invalide -> Invité
-            } else {
-                socket.user = decoded; // Token OK -> Authentifié
-            }
+            if (err) socket.user = null; else socket.user = decoded;
             next();
         });
     } else {
-        socket.user = null; // Pas de token -> Invité
+        socket.user = null;
         next();
     }
 });
 
 io.on('connection', (socket) => {
-    console.log('Nouveau socket : ' + socket.id);
-
     socket.emit('currentPlayers', players);
     socket.emit('updateWolf', wolfId);
     if (currentBackground) socket.emit('updateBackground', currentBackground);
 
-    // REJOINDRE LE JEU
     socket.on('joinGame', async () => {
         if(players[socket.id]) return;
-
         let finalPseudo = "Invité";
         let userColor = '#' + Math.floor(Math.random()*16777215).toString(16);
-
-        // AUTHENTIFICATION FORTE : On utilise socket.user (JWT)
         if (socket.user && socket.user.pseudo) {
             finalPseudo = socket.user.pseudo;
             try {
@@ -276,10 +258,8 @@ io.on('connection', (socket) => {
                 }
             } catch (err) { console.error("Erreur chargement user:", err); }
         } else {
-            // Mode Invité
             finalPseudo = "Cube" + Math.floor(Math.random() * 1000);
         }
-
         players[socket.id] = {
             x: Math.floor(Math.random() * 500) + 50,
             y: Math.floor(Math.random() * 400) + 50,
@@ -287,13 +267,7 @@ io.on('connection', (socket) => {
             pseudo: finalPseudo,
             pendingDistance: 0
         };
-
-        if (!wolfId) {
-            wolfId = socket.id;
-            lastWolfMoveTime = Date.now();
-            io.emit('updateWolf', wolfId);
-        }
-
+        if (!wolfId) { wolfId = socket.id; lastWolfMoveTime = Date.now(); io.emit('updateWolf', wolfId); }
         socket.emit('gameJoined', { id: socket.id, info: players[socket.id] });
         socket.broadcast.emit('newPlayer', { playerId: socket.id, playerInfo: players[socket.id] });
     });
@@ -322,7 +296,6 @@ io.on('connection', (socket) => {
             const target = players[targetId];
             const dx = Math.abs(wolf.x - target.x);
             const dy = Math.abs(wolf.y - target.y);
-
             if (dx < 90 && dy < 90) {
                 if (now - lastTagTime > TAG_COOLDOWN) {
                     wolfId = targetId;
@@ -330,11 +303,8 @@ io.on('connection', (socket) => {
                     lastWolfMoveTime = Date.now(); 
                     io.emit('updateWolf', wolfId);
                     io.emit('playerTagged', { x: target.x + 25, y: target.y + 25, color: target.color });
-
                     const wolfPseudo = wolf.pseudo;
                     const targetPseudo = target.pseudo;
-                    
-                    // MAJ Stats LOUP
                     if (wolfPseudo !== "Invité" && !wolfPseudo.startsWith("Cube")) {
                         const uWolf = await User.findOne({ pseudo: wolfPseudo });
                         if (uWolf) {
@@ -343,7 +313,6 @@ io.on('connection', (socket) => {
                             await uWolf.save();
                         }
                     }
-                    // MAJ Stats VICTIME
                     if (targetPseudo !== "Invité" && !targetPseudo.startsWith("Cube")) {
                         const uTarget = await User.findOne({ pseudo: targetPseudo });
                         if (uTarget) {
@@ -383,10 +352,8 @@ io.on('connection', (socket) => {
             form.append('models', 'nudity'); 
             form.append('api_user', API_USER);
             form.append('api_secret', API_SECRET);
-
             const response = await axios.post(API_URL, form, { headers: form.getHeaders() });
             const result = response.data;
-            
             if (result.status === 'success') {
                 const isNude = result.nudity.raw > 0.5 || result.nudity.partial > 0.6;
                 if (isNude) {
@@ -398,7 +365,6 @@ io.on('connection', (socket) => {
                     uploadCooldowns[socket.id] = now + COOLDOWN_NORMAL; 
                     currentBackground = imageData;
                     io.emit('updateBackground', imageData);
-                    
                     if (socket.user && socket.user.pseudo) {
                          const u = await User.findOne({ pseudo: socket.user.pseudo });
                          if(u) {
@@ -409,14 +375,10 @@ io.on('connection', (socket) => {
                     }
                 }
             }
-        } catch (error) {
-            console.error(error.message);
-            socket.emit('uploadError', "Erreur analyse image.");
-        }
+        } catch (error) { socket.emit('uploadError', "Erreur analyse image."); }
     });
 
     socket.on('saveSkin', async (data) => {
-        // AUTHENTIFICATION : Seul le Token fait foi
         if (socket.user && socket.user.pseudo && data.color) {
              await User.updateOne({ pseudo: socket.user.pseudo }, { $set: { currentSkin: data.color } });
         }
@@ -428,14 +390,11 @@ io.on('connection', (socket) => {
             socket.emit('codeError', "Connecte-toi d'abord !");
             return;
         }
-        
         const pseudo = socket.user.pseudo;
         const cleanCode = code.trim().toUpperCase();
-
         if (SECRET_CODES[cleanCode]) {
             const reward = SECRET_CODES[cleanCode];
             const user = await User.findOne({ pseudo });
-            
             if (user) {
                 if (!user.redeemedCodes) user.redeemedCodes = [];
                 if (user.redeemedCodes.includes(cleanCode)) {
@@ -464,7 +423,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- GESTION AFK ---
 setInterval(() => {
     const ids = Object.keys(players);
     if (wolfId && ids.length > 1) {
@@ -476,7 +434,6 @@ setInterval(() => {
     }
 }, 1000);
 
-// --- SAUVEGARDE PÉRIODIQUE ---
 setInterval(async () => {
     console.log("💾 Sauvegarde auto distances...");
     for (const id in players) {

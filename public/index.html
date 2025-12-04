@@ -220,7 +220,7 @@
     let playersData = {};
     const cubeSize = 50;
     let myId = null, myX = 0, myY = 0, currentWolfId = null, isPlaying = false;
-    let currentUserPseudo = "Invité"; // Par défaut
+    let currentUserPseudo = "Invité";
 
     const keysPressed = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
     const speedPerSec = 750, emitThrottleMs = 20, tagCooldownMs = 1000;
@@ -228,10 +228,7 @@
     let fxCanvas, fxCtx, fxParticles = [];
     const gameLayer = document.getElementById('game-layer');
 
-    // --- AU CHARGEMENT : VÉRIFICATION IDENTITÉ ---
     window.addEventListener('load', async () => {
-        // On n'utilise plus cube_pseudo du tout
-        // Si on a un token, on demande au serveur qui on est
         if (storedToken) {
             try {
                 const res = await fetch('/api/me', {
@@ -242,16 +239,14 @@
                     if (data.success) {
                         currentUserPseudo = data.pseudo;
                         goToLobby(currentUserPseudo);
-                        return; // Connecté !
+                        return;
                     }
                 } else {
-                    // Token expiré ou invalide
                     console.log("Token invalide ou expiré");
                     localStorage.removeItem('cube_token');
                 }
             } catch(e) { console.error("Erreur auth auto", e); }
         }
-        // Si pas de token ou erreur, on reste sur l'écran de login
     });
 
     function showForm(type) {
@@ -295,15 +290,10 @@
             const data = await res.json();
             if (data.success) {
                 msg.innerText = "Succès !"; msg.style.color = "green";
-                
-                // ON NE STOCKE PLUS LE PSEUDO EN LOCALSTORAGE
                 localStorage.setItem('cube_token', data.token);
                 currentUserPseudo = data.pseudo;
-
-                // Reset socket avec nouveau token
                 socket.auth.token = data.token;
                 socket.disconnect().connect();
-
                 setTimeout(() => goToLobby(data.pseudo), 500);
             } else { msg.innerText = data.message; msg.style.color = "red"; }
         } catch (e) { msg.innerText = "Erreur serveur"; msg.style.color = "red"; }
@@ -342,7 +332,6 @@
         document.getElementById('game-layer').classList.add('blurred');
         document.getElementById('lobby-pseudo').innerText = pseudo;
         document.getElementById('afk-msg').style.display = 'none';
-        
         document.getElementById('toggle-btn').style.display = 'none';
         document.getElementById('ui-container').style.display = 'none';
         document.getElementById('menu-overlay').classList.remove('hidden');
@@ -355,23 +344,22 @@
         document.getElementById('game-layer').classList.remove('blurred');
         document.getElementById('toggle-btn').style.display = 'block';
         document.getElementById('ui-container').style.display = 'flex';
-        // Le serveur nous identifie via le token
         socket.emit('joinGame');
         isPlaying = true;
     }
 
     function doLogout() {
-        localStorage.removeItem('cube_token'); // On supprime juste le token
+        localStorage.removeItem('cube_token');
         currentUserPseudo = "Invité";
         location.reload();
     }
 
-    // --- GAME LOGIC ---
     function applySkinToElement(el, skinVal) {
         el.style.background = '';
         el.className.split(' ').forEach(c => { if (c.startsWith('skin-')) el.classList.remove(c); });
         if (skinVal && skinVal.startsWith('skin-')) el.classList.add(skinVal); else el.style.background = skinVal;
     }
+
     function initFxCanvas() {
         fxCanvas = document.createElement('canvas');
         fxCanvas.style.position = 'absolute'; fxCanvas.style.left = '0'; fxCanvas.style.top = '0';
@@ -470,24 +458,48 @@
         }
         return { x: newX, y: newY };
     }
+    // --- DANS public/index.html ---
+
+    let wasMoving = false; // AJOUT : Pour se souvenir si on bougeait à la frame d'avant
+
     function animate(now) {
         const dt = now - lastFrameTime; lastFrameTime = now;
+        
         if (isPlaying && myId) {
             let potentialX = myX, potentialY = myY, moved = false;
             const step = speedPerSec * (dt / 1000);
+            
+            // Calcul des mouvements...
             if (keysPressed.ArrowUp) { potentialY -= step; moved = true; }
             if (keysPressed.ArrowDown) { potentialY += step; moved = true; }
             if (keysPressed.ArrowLeft) { potentialX -= step; moved = true; }
             if (keysPressed.ArrowRight) { potentialX += step; moved = true; }
+            
             const maxX = window.innerWidth - cubeSize, maxY = window.innerHeight - cubeSize;
             potentialX = Math.max(0, Math.min(potentialX, maxX)); potentialY = Math.max(0, Math.min(potentialY, maxY));
+            
             if (moved) {
                 const resolved = resolveCollisionsAndTag(potentialX, potentialY);
                 myX = resolved.x; myY = resolved.y;
                 if (playersDOM[myId]) playersDOM[myId].style.transform = `translate3d(${myX}px, ${myY}px, 0)`;
-                if ((Date.now() - lastEmitTime) > emitThrottleMs) { lastEmitTime = Date.now(); socket.emit('playerMovement', { x: Math.round(myX), y: Math.round(myY) }); }
+                
+                // Envoi régulier (toutes les 20ms)
+                if ((Date.now() - lastEmitTime) > emitThrottleMs) { 
+                    lastEmitTime = Date.now(); 
+                    socket.emit('playerMovement', { x: Math.round(myX), y: Math.round(myY) }); 
+                }
+            } 
+            // --- AJOUT CORRECTIF START ---
+            // Si on ne bouge plus MAIS qu'on bougeait juste avant, on envoie la position FINALE exacte
+            else if (wasMoving) {
+                socket.emit('playerMovement', { x: Math.round(myX), y: Math.round(myY) });
             }
+            // --- AJOUT CORRECTIF END ---
+
+            wasMoving = moved; // On met à jour l'état pour la prochaine frame
         }
+
+        // Interpolation des autres joueurs (reste inchangé)
         for (const id in playersData) {
             if (id === myId) continue;
             const p = playersData[id], lerpFactor = Math.min(1, (dt / 1000) * 15);
@@ -585,6 +597,7 @@
     }
     function openAchievements() { document.getElementById('lobby-panel').style.display = 'none'; document.getElementById('achievements-panel').style.display = 'block'; loadAchievements(); }
     function closeAchievements() { document.getElementById('achievements-panel').style.display = 'none'; document.getElementById('lobby-panel').style.display = 'block'; }
+
     function isSkinClassDefined(className) {
         for (let i = 0; i < document.styleSheets.length; i++) {
             try {
@@ -594,6 +607,7 @@
         }
         return false;
     }
+
     async function loadAchievements() {
         const listDiv = document.getElementById('achievements-list'); const skinsDiv = document.getElementById('skins-container');
         listDiv.innerHTML = "Chargement...";
@@ -601,6 +615,7 @@
         try {
             const res = await fetch('/api/my-achievements/' + encodeURIComponent(currentUserPseudo));
             const data = await res.json();
+            
             if (data.success) {
                 listDiv.innerHTML = "";
                 data.achievements.forEach(ach => {
@@ -608,16 +623,25 @@
                     div.innerHTML = `<div><div style="font-weight:bold;">${ach.name}</div><div style="font-size:12px;">${ach.desc}</div></div><div style="font-size:20px;">${ach.unlocked ? '✅' : '🔒'}</div>`;
                     listDiv.appendChild(div);
                 });
+
                 skinsDiv.innerHTML = "";
+                // Le bouton Aléatoire reste manuel
                 const defBtn = document.createElement('div'); defBtn.className = 'skin-box'; defBtn.style.background = 'white'; defBtn.style.display = 'flex'; defBtn.style.alignItems='center'; defBtn.style.justifyContent='center'; defBtn.innerText = "?"; defBtn.setAttribute('data-name', 'Aléatoire');
                 defBtn.onclick = () => { applySkin('#' + Math.floor(Math.random()*16777215).toString(16)); }; skinsDiv.appendChild(defBtn);
 
-                const skinNames = { '#ff0000': 'Rouge Sang', 'linear-gradient(45deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)': 'Aube', '#00ccff': 'Azur', 'linear-gradient(to right, #f12711, #f5af19)': 'Feu', '#9b59b6': 'Améthyste', '#7f8c8d': 'Fantôme', 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)': 'Skin Admin', '#00ff00': 'Hacker Green', 'linear-gradient(to bottom, #f7971e, #ffd200)': 'Or Massif', 'skin-rainbow': 'Arc-en-ciel Divin', 'skin-glitch': 'Matrix', 'skin-nyan': 'Nyan Cat', 'skin-pulse': 'Pulsation' };
+                // --- ICI LA MODIFICATION MAJEURE ---
+                // On utilise data.skinMap fourni par le serveur
+                const skinNames = data.skinMap || {};
 
                 data.unlockedSkins.forEach(skin => {
                     if (skin.startsWith('skin-') && !isSkinClassDefined(skin)) return;
                     const btn = document.createElement('div'); btn.className = 'skin-box';
-                    let displayName = skinNames[skin]; if (!displayName) displayName = skin.startsWith('#') ? "Couleur " + skin : "Spécial";
+                    
+                    // Recherche du nom dans la map envoyée par le serveur
+                    let displayName = skinNames[skin]; 
+                    // Fallback si le serveur ne connait pas ce skin (ex: vieux skin custom)
+                    if (!displayName) displayName = skin.startsWith('#') ? "Couleur " + skin : "Spécial";
+                    
                     btn.setAttribute('data-name', displayName);
                     if (skin.startsWith('skin-')) btn.classList.add(skin); else btn.style.background = skin;
                     btn.onclick = () => applySkin(skin); skinsDiv.appendChild(btn);
