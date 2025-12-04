@@ -1,0 +1,110 @@
+/* L'élément parent (le skin) doit être en position relative */
+.skin-icon {
+    position: relative; /* Important pour que le nom s'ancre au skin */
+    cursor: pointer;
+}
+
+/* Le style de l'infobulle (cachée par défaut) */
+.skin-icon::after {
+    content: attr(data-name); /* Récupère le texte du HTML ! */
+    
+    /* Positionnement */
+    position: absolute;
+    bottom: 120%; /* S'affiche juste au-dessus du skin */
+    left: 50%;
+    transform: translateX(-50%); /* Pour centrer parfaitement le texte */
+    
+    /* Apparence */
+    background-color: rgba(0, 0, 0, 0.8); /* Fond noir semi-transparent */
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 14px;
+    white-space: nowrap; /* Empêche le texte de passer à la ligne */
+    pointer-events: none; /* La souris passe au travers */
+    z-index: 100; /* S'assure que le texte passe au-dessus de tout */
+    
+    /* Animation d'apparition */
+    opacity: 0; 
+    transition: opacity 0.2s ease;
+    visibility: hidden;
+}
+
+/* On ajoute une petite flèche en bas (optionnel, pour le style) */
+.skin-icon::before {
+    content: "";
+    position: absolute;
+    bottom: 110%; /* Juste en dessous du texte */
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
+    
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    visibility: hidden;
+}
+
+/* L'apparition au survol */
+.skin-icon:hover::after,
+.skin-icon:hover::before {
+    opacity: 1;
+    visibility: visible;
+    bottom: 125%; /* Petit mouvement vers le haut sympa */
+}
+
+
+
+/* --- SKIN: RAINBOW (Animation de couleur) --- */
+@keyframes rainbow {
+    0% { background: #ff0000; }
+    20% { background: #ffff00; }
+    40% { background: #00ff00; }
+    60% { background: #00ffff; }
+    80% { background: #0000ff; }
+    100% { background: #ff00ff; }
+}
+.skin-rainbow {
+    animation: rainbow 2s linear infinite;
+    border: 2px solid white;
+}
+
+/* --- SKIN: GLITCH (Effet buggé) --- */
+.skin-glitch {
+    background: repeating-linear-gradient(
+        45deg,
+        #000,
+        #000 5px,
+        #333 5px,
+        #333 10px
+    );
+    border: 2px solid #0f0;
+    box-shadow: 0 0 5px #0f0;
+}
+
+
+
+/* --- SKIN: PULSE (Ça respire) --- */
+/* Dans skins.css */
+
+.skin-pulse {
+    background-color: #ff0055; /* Couleur de base */
+    border-radius: 5px;
+    /* IMPORTANT : On ne met PAS de transform ici */
+    animation: pulse-effect 1.5s infinite;
+}
+
+@keyframes pulse-effect {
+    0% {
+        /* Au début : pas d'ombre */
+        box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7);
+    }
+    70% {
+        /* À 70% : L'ombre s'est écartée de 15px et devient transparente */
+        box-shadow: 0 0 0 15px rgba(255, 0, 85, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 0, 85, 0);
+    }
+}
