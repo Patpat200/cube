@@ -77,6 +77,8 @@ async function checkAchievements(user, socketId) {
     }
 
     if (changed) {
+        // Note: On ne fait pas le save() ici, car on le fait manuellement après pour être sûr de tout sauvegarder
+        // Mais on garde le save() ici au cas où la fonction est appelée seule.
         await user.save();
         if (socketId) {
             newUnlocks.forEach(ach => {
@@ -162,6 +164,7 @@ async function removePlayerFromGame(socketId) {
                 if(user) {
                     user.distanceTraveled = (user.distanceTraveled || 0) + Math.round(p.pendingDistance);
                     await checkAchievements(user, null);
+                    await user.save(); // [CORRECTION] Sauvegarde forcée
                 }
             } catch(e) { console.error(e); }
         }
@@ -275,6 +278,7 @@ io.on('connection', (socket) => {
                         if (uWolf) {
                             uWolf.tagsInflicted = (uWolf.tagsInflicted || 0) + 1;
                             await checkAchievements(uWolf, socket.id);
+                            await uWolf.save(); // [CORRECTION] Sauvegarde des stats du loup
                         }
                     }
                     if (targetPseudo !== "Invité" && !targetPseudo.startsWith("Cube")) {
@@ -282,6 +286,7 @@ io.on('connection', (socket) => {
                         if (uTarget) {
                             uTarget.timesTagged = (uTarget.timesTagged || 0) + 1;
                             await checkAchievements(uTarget, targetId);
+                            await uTarget.save(); // [CORRECTION] Sauvegarde des stats de la victime
                         }
                     }
                 }
@@ -336,6 +341,7 @@ io.on('connection', (socket) => {
                          if(u) {
                              u.backgroundsChanged = (u.backgroundsChanged || 0) + 1;
                              await checkAchievements(u, socket.id);
+                             await u.save(); // [CORRECTION] Sauvegarde des stats de background
                          }
                     }
                 }
@@ -353,7 +359,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- NOUVEAU : GESTION DES CODES SECRETS ---
+    // --- GESTION DES CODES SECRETS ---
     socket.on('redeemCode', async (data) => {
         const { pseudo, code } = data;
         if (!pseudo || pseudo === "Invité") return;
@@ -376,6 +382,7 @@ io.on('connection', (socket) => {
                         socket.emit('updateSkins', user.unlockedSkins);
                     } else {
                         socket.emit('codeError', "Tu as déjà ce skin !");
+                        // Optionnel: Sauvegarder si tu veux marquer le code comme utilisé même si le skin était déjà là
                     }
                 }
             }
@@ -415,6 +422,7 @@ setInterval(async () => {
                 if(user) {
                     user.distanceTraveled = (user.distanceTraveled || 0) + Math.round(p.pendingDistance);
                     await checkAchievements(user, id);
+                    await user.save(); // [CORRECTION] Sauvegarde périodique
                 }
                 p.pendingDistance = 0;
             } catch (err) { console.error(`Erreur save dist ${p.pseudo}:`, err); }
