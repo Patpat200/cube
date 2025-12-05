@@ -9,28 +9,32 @@ const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const sharp = require('sharp');
 const jwt = require('jsonwebtoken');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const { ACHIEVEMENTS, SECRET_CODES } = require('./gameConfig');
 
-// --- GÉNÉRATION DYNAMIQUE DES NOMS DE SKINS ---
-// On crée un dictionnaire { "valeur_css": "Nom du skin" }
+// --- SÉCURITÉ : HELMET (Headers HTTP) ---
+app.use(helmet({
+    contentSecurityPolicy: false, // Désactivé pour éviter de bloquer les scripts inline de ton projet actuel
+}));
+
+// --- CONFIGURATION SKINS ---
 const ALL_SKIN_NAMES = {};
-
-// 1. Depuis les succès
 ACHIEVEMENTS.forEach(ach => {
-    if (ach.rewardSkin && ach.skinName) {
-        ALL_SKIN_NAMES[ach.rewardSkin] = ach.skinName;
-    }
+    if (ach.rewardSkin && ach.skinName) ALL_SKIN_NAMES[ach.rewardSkin] = ach.skinName;
 });
-
-// 2. Depuis les codes secrets
 Object.values(SECRET_CODES).forEach(code => {
-    if (code.skin && code.name) {
-        ALL_SKIN_NAMES[code.skin] = code.name;
-    }
+    if (code.skin && code.name) ALL_SKIN_NAMES[code.skin] = code.name;
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || "CHANGE_MOI_IMMEDIATEMENT_POUR_SECURISE";
+// --- SÉCURITÉ : SECRET JWT ---
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error("🔴 ERREUR CRITIQUE : La variable JWT_SECRET est absente du fichier .env !");
+    console.error("Le serveur ne peut pas démarrer de manière sécurisée.");
+    process.exit(1);
+}
 
 // --- CONNEXION MONGODB ---
 mongoose.connect(process.env.MONGO_URI)
@@ -56,8 +60,29 @@ const User = mongoose.model('User', UserSchema);
 
 const io = require('socket.io')(http, { maxHttpBufferSize: 5 * 1024 * 1024 });
 
-app.use(express.json());
+// --- SÉCURITÉ : RATE LIMITING (Limitation de débit) ---
+// Limiter les requêtes API générales
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limite chaque IP à 100 requêtes par fenêtre
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+// Limiter drastiquement les tentatives de connexion/inscription (Brute-force protection)
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Max 10 tentatives de création de compte ou login
+    message: { success: false, message: "Trop de tentatives, réessayez plus tard." }
+});
+
+app.use(express.json({ limit: '10kb' })); // Limite la taille du body JSON
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/api/', apiLimiter); 
+
+// --- FONCTION UTILITAIRE : Échapper les Regex (Anti-Injection NoSQL) ---
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Échappe les caractères spéciaux
+}
 
 // --- VARIABLES JEU ---
 let players = {};
@@ -116,12 +141,16 @@ function authenticateToken(req, res, next) {
 
 // --- ROUTES API ---
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
     const { pseudo, password } = req.body;
     if (!pseudo || !password) return res.json({ success: false, message: "Champs manquants." });
     if (pseudo.length > 12) return res.json({ success: false, message: "Pseudo trop long." });
+    
+    // Nettoyage regex pour sécurité
+    const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, 'i');
+
     try {
-        const existingUser = await User.findOne({ pseudo: { $regex: new RegExp(`^${pseudo}$`, 'i') } });
+        const existingUser = await User.findOne({ pseudo: { $regex: safePseudoRegex } });
         if (existingUser) return res.json({ success: false, message: "Pseudo pris." });
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = new User({ pseudo, password: hashedPassword });
@@ -130,10 +159,15 @@ app.post('/api/register', async (req, res) => {
     } catch (error) { res.json({ success: false, message: "Erreur serveur." }); }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
     const { pseudo, password } = req.body;
+    if (!pseudo || !password) return res.json({ success: false, message: "Champs manquants." });
+
+    // Nettoyage regex pour sécurité
+    const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, 'i');
+
     try {
-        const user = await User.findOne({ pseudo: { $regex: new RegExp(`^${pseudo}$`, 'i') } });
+        const user = await User.findOne({ pseudo: { $regex: safePseudoRegex } });
         if (!user) return res.json({ success: false, message: "Utilisateur inconnu." });
         const match = await bcrypt.compare(password, user.password);
         if (match) {
@@ -172,7 +206,6 @@ app.get('/api/leaderboard', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
-// ROUTE MISE À JOUR : Renvoie aussi la map des noms de skins
 app.get('/api/my-achievements/:pseudo', async (req, res) => {
     try {
         const user = await User.findOne({ pseudo: req.params.pseudo }).select('achievements unlockedSkins');
@@ -183,7 +216,6 @@ app.get('/api/my-achievements/:pseudo', async (req, res) => {
             name: ach.name,
             desc: ach.desc,
             unlocked: user.achievements.includes(ach.id),
-            // On renvoie aussi le skin associé pour l'affichage
             rewardSkin: ach.rewardSkin
         }));
         
@@ -191,7 +223,7 @@ app.get('/api/my-achievements/:pseudo', async (req, res) => {
             success: true, 
             achievements: list, 
             unlockedSkins: user.unlockedSkins,
-            skinMap: ALL_SKIN_NAMES // <-- LE DICCO MAGIQUE
+            skinMap: ALL_SKIN_NAMES 
         });
     } catch (e) { res.json({ success: false }); }
 });
