@@ -53,6 +53,14 @@
             position: fixed; top: 10px; left: 10px; z-index: 2000;
             padding: 8px 12px; background: #fff; border: 2px solid #ccc; border-radius: 5px; cursor: pointer; font-weight: bold; display: none;
         }
+
+        #btn-leave {
+            position: fixed; top: 10px; left: 110px; z-index: 2000; /* Décalé à droite */
+            padding: 8px 12px; background: #fff; border: 2px solid #ccc; /* Même couleur que Menu */
+            border-radius: 5px; cursor: pointer; font-weight: bold; display: none;
+        }
+        #btn-leave:hover { background: #eee; } /* Petit effet gris au survol */
+
         #ui-container {
             position: fixed; top: 50px; left: 10px;
             background: rgba(255, 255, 255, 0.95);
@@ -197,6 +205,7 @@
 </div>
 
 <button id="toggle-btn" onclick="toggleUI()">Menu (H)</button>
+<button id="btn-leave" onclick="tryLeaveGame()">Quitter (L)</button>
 <div id="ui-container">
     <label><strong>Changer le fond :</strong></label>
     <div style="font-size: 10px; color: #555; margin-bottom: 5px;">(Cooldown: 15s)</div>
@@ -333,6 +342,7 @@
         document.getElementById('lobby-pseudo').innerText = pseudo;
         document.getElementById('afk-msg').style.display = 'none';
         document.getElementById('toggle-btn').style.display = 'none';
+        document.getElementById('btn-leave').style.display = 'none';
         document.getElementById('ui-container').style.display = 'none';
         document.getElementById('menu-overlay').classList.remove('hidden');
         isPlaying = false;
@@ -343,6 +353,7 @@
         document.getElementById('menu-overlay').classList.add('hidden');
         document.getElementById('game-layer').classList.remove('blurred');
         document.getElementById('toggle-btn').style.display = 'block';
+        document.getElementById('btn-leave').style.display = 'block';
         document.getElementById('ui-container').style.display = 'flex';
         socket.emit('joinGame');
         isPlaying = true;
@@ -542,6 +553,14 @@ function applySkinToElement(el, skinVal) {
         }
         requestAnimationFrame(stepFx);
     }
+
+
+    function tryLeaveGame() {
+        if (confirm("Veux-tu vraiment retourner au menu principal ?")) {
+            goToLobby(currentUserPseudo);
+        }
+    }
+
     function toggleUI() { document.getElementById('ui-container').classList.toggle('hidden'); document.body.focus(); }
     function uploadImage() {
         const fileInput = document.getElementById('fileInput');
@@ -687,10 +706,11 @@ function applySkinToElement(el, skinVal) {
             }
         } catch(e) { console.error(e); }
     }
-    document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h' && document.activeElement.tagName !== 'INPUT') toggleUI(); if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = true; });
+    document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h' && document.activeElement.tagName !== 'INPUT') toggleUI(); if (e.key.toLowerCase() === 'l' && isPlaying) tryLeaveGame(); if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = true; });
     document.addEventListener('keyup', (e) => { if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = false; });
     let lastFrameTime = performance.now();
     initFxCanvas(); requestAnimationFrame(animate);
 </script>
 </body>
 </html>
+
