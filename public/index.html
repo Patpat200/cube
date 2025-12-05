@@ -354,10 +354,29 @@
         location.reload();
     }
 
-    function applySkinToElement(el, skinVal) {
+function applySkinToElement(el, skinVal) {
+        // 1. Réinitialisation complète
         el.style.background = '';
-        el.className.split(' ').forEach(c => { if (c.startsWith('skin-')) el.classList.remove(c); });
-        if (skinVal && skinVal.startsWith('skin-')) el.classList.add(skinVal); else el.style.background = skinVal;
+        el.style.backgroundImage = '';
+        el.className.split(' ').forEach(c => { 
+            if (c.startsWith('skin-')) el.classList.remove(c); 
+        });
+
+        if (!skinVal) return;
+
+        // 2. CAS IMAGE (URL Web ou chemin local)
+        if (skinVal.startsWith('http') || skinVal.startsWith('/') || skinVal.startsWith('data:image')) {
+            el.style.backgroundImage = `url('${skinVal}')`;
+            el.classList.add('skin-image'); // Ajoute la classe CSS créée à l'étape 1
+        }
+        // 3. CAS CLASSE CSS (ex: skin-rainbow)
+        else if (skinVal.startsWith('skin-')) {
+            el.classList.add(skinVal);
+        }
+        // 4. CAS COULEUR SIMPLE (ex: #ff0000)
+        else {
+            el.style.background = skinVal;
+        }
     }
 
     function initFxCanvas() {
@@ -633,18 +652,37 @@
                 // On utilise data.skinMap fourni par le serveur
                 const skinNames = data.skinMap || {};
 
+// Remplace la partie à l'intérieur de data.unlockedSkins.forEach...
                 data.unlockedSkins.forEach(skin => {
+                    // Si c'est une classe CSS et qu'elle n'existe pas dans le fichier, on ignore
                     if (skin.startsWith('skin-') && !isSkinClassDefined(skin)) return;
-                    const btn = document.createElement('div'); btn.className = 'skin-box';
                     
-                    // Recherche du nom dans la map envoyée par le serveur
+                    const btn = document.createElement('div'); 
+                    btn.className = 'skin-box';
+                    
                     let displayName = skinNames[skin]; 
-                    // Fallback si le serveur ne connait pas ce skin (ex: vieux skin custom)
-                    if (!displayName) displayName = skin.startsWith('#') ? "Couleur " + skin : "Spécial";
+                    if (!displayName) displayName = skin.startsWith('#') ? "Couleur" : "Skin";
                     
                     btn.setAttribute('data-name', displayName);
-                    if (skin.startsWith('skin-')) btn.classList.add(skin); else btn.style.background = skin;
-                    btn.onclick = () => applySkin(skin); skinsDiv.appendChild(btn);
+
+                    // --- NOUVELLE LOGIQUE D'AFFICHAGE ---
+                    if (skin.startsWith('http') || skin.startsWith('/') || skin.startsWith('data:image')) {
+                        // C'est une image
+                        btn.style.backgroundImage = `url('${skin}')`;
+                        btn.classList.add('skin-image');
+                    }
+                    else if (skin.startsWith('skin-')) {
+                        // C'est une classe
+                        btn.classList.add(skin); 
+                    } 
+                    else {
+                        // C'est une couleur
+                        btn.style.background = skin;
+                    }
+                    // ------------------------------------
+
+                    btn.onclick = () => applySkin(skin); 
+                    skinsDiv.appendChild(btn);
                 });
             }
         } catch(e) { console.error(e); }
