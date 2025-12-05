@@ -50,6 +50,25 @@
     bottom: 125%;
 }
 
+
+/* --- SKIN IMAGE (Pixel Art & GIFs) --- */
+.skin-image {
+    background-size: cover;       /* L'image remplit tout le cube */
+    background-repeat: no-repeat; /* Pas de répétition */
+    background-position: center;  /* Centrer l'image */
+    
+    /* Crucial pour le Pixel Art : garde les pixels nets sans flou */
+    image-rendering: pixelated;   
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    
+    background-color: transparent; /* Fond transparent si l'image a de la transparence */
+    border: none; /* On enlève la bordure par défaut si l'image fait tout le travail */
+}
+
+
+
+
 /* --- SKIN: RAINBOW --- */
 @keyframes rainbow {
     0% { background: #ff0000; }
