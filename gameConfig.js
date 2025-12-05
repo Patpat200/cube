@@ -128,7 +128,6 @@ const SECRET_CODES = {
         skin: 'skin-tophat',
         name: 'Le Chic'
     },
-    ,
     "PIXEL": {
         skin: 'https://art.pixilart.com/original/sr5z26073f1b17aws3.gif', 
         name: 'Pixel Art'
