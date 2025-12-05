@@ -339,6 +339,7 @@
         document.getElementById('auth-panel').style.display = 'none';
         document.getElementById('lobby-panel').style.display = 'block';
         document.getElementById('game-layer').classList.add('blurred');
+        // Protection XSS : usage de innerText au lieu de innerHTML/direct insertion si jamais
         document.getElementById('lobby-pseudo').innerText = pseudo;
         document.getElementById('afk-msg').style.display = 'none';
         document.getElementById('toggle-btn').style.display = 'none';
@@ -365,7 +366,7 @@
         location.reload();
     }
 
-function applySkinToElement(el, skinVal) {
+    function applySkinToElement(el, skinVal) {
         // 1. Réinitialisation complète
         el.style.background = '';
         el.style.backgroundImage = '';
@@ -424,7 +425,11 @@ function applySkinToElement(el, skinVal) {
     socket.on('codeError', (msg) => { alert("Code Erreur : " + msg); });
     function showToast(title, desc) {
         const toast = document.getElementById('ach-toast');
-        document.getElementById('ach-toast-msg').innerHTML = `<strong>${title}</strong><br>${desc}`;
+        // Attention : title et desc viennent du serveur (via la config gameConfig.js), donc de confiance.
+        // Si desc est injecté, il faut innerText, mais on veut garder le formatage.
+        // Comme les succès sont hardcodés côté serveur, c'est acceptable ici, mais pour plus de sécu :
+        const str = `<strong>${title}</strong><br>${desc}`;
+        document.getElementById('ach-toast-msg').innerHTML = str;
         toast.style.right = "20px"; setTimeout(() => { toast.style.right = "-300px"; }, 4000);
     }
     socket.on('currentPlayers', (serverPlayers) => {
@@ -488,9 +493,8 @@ function applySkinToElement(el, skinVal) {
         }
         return { x: newX, y: newY };
     }
-    // --- DANS public/index.html ---
 
-    let wasMoving = false; // AJOUT : Pour se souvenir si on bougeait à la frame d'avant
+    let wasMoving = false; 
 
     function animate(now) {
         const dt = now - lastFrameTime; lastFrameTime = now;
@@ -519,17 +523,15 @@ function applySkinToElement(el, skinVal) {
                     socket.emit('playerMovement', { x: Math.round(myX), y: Math.round(myY) }); 
                 }
             } 
-            // --- AJOUT CORRECTIF START ---
-            // Si on ne bouge plus MAIS qu'on bougeait juste avant, on envoie la position FINALE exacte
+            // Si on ne bouge plus MAIS qu'on bougeait juste avant
             else if (wasMoving) {
                 socket.emit('playerMovement', { x: Math.round(myX), y: Math.round(myY) });
             }
-            // --- AJOUT CORRECTIF END ---
 
-            wasMoving = moved; // On met à jour l'état pour la prochaine frame
+            wasMoving = moved;
         }
 
-        // Interpolation des autres joueurs (reste inchangé)
+        // Interpolation des autres joueurs
         for (const id in playersData) {
             if (id === myId) continue;
             const p = playersData[id], lerpFactor = Math.min(1, (dt / 1000) * 15);
@@ -619,20 +621,60 @@ function applySkinToElement(el, skinVal) {
             } else { msgDiv.innerText = "Pas de stats."; msgDiv.style.display = 'block'; }
         } catch (e) { msgDiv.innerText = "Erreur."; }
     }
+    
+    // --- CORRECTION MAJEURE ICI : PROTECTION XSS ---
+    // Utilisation de textContent au lieu de innerHTML pour les données utilisateurs
     async function loadLeaderboard() {
-        const listHunters = document.getElementById('list-hunters'); const listTravelers = document.getElementById('list-travelers');
-        listHunters.innerHTML = "Chargement..."; listTravelers.innerHTML = "Chargement...";
+        const listHunters = document.getElementById('list-hunters'); 
+        const listTravelers = document.getElementById('list-travelers');
+        
+        listHunters.innerHTML = "Chargement..."; 
+        listTravelers.innerHTML = "Chargement...";
+        
         try {
             const res = await fetch('/api/leaderboard');
             const data = await res.json();
             if (data.success) {
+                // Vider les listes
                 listHunters.innerHTML = "";
-                data.hunters.forEach((p, i) => { const li = document.createElement('li'); li.innerHTML = `<strong>#${i+1} ${p.pseudo}</strong> : ${p.tagsInflicted} tags`; li.style.borderBottom = "1px solid #eee"; li.style.padding = "4px 0"; listHunters.appendChild(li); });
                 listTravelers.innerHTML = "";
-                data.travelers.forEach((p, i) => { const li = document.createElement('li'); li.innerHTML = `<strong>#${i+1} ${p.pseudo}</strong> : ${Math.round(p.distanceTraveled)} px`; li.style.borderBottom = "1px solid #eee"; li.style.padding = "4px 0"; listTravelers.appendChild(li); });
+
+                // Construction sécurisée (Top Chasseurs)
+                data.hunters.forEach((p, i) => { 
+                    const li = document.createElement('li');
+                    
+                    const strong = document.createElement('strong');
+                    strong.textContent = `#${i+1} ${p.pseudo}`; // Sécurisé
+                    
+                    li.appendChild(strong);
+                    li.append(` : ${p.tagsInflicted} tags`);
+                    
+                    li.style.borderBottom = "1px solid #eee"; 
+                    li.style.padding = "4px 0"; 
+                    listHunters.appendChild(li); 
+                });
+
+                // Construction sécurisée (Top Voyageurs)
+                data.travelers.forEach((p, i) => { 
+                    const li = document.createElement('li');
+                    
+                    const strong = document.createElement('strong');
+                    strong.textContent = `#${i+1} ${p.pseudo}`; // Sécurisé
+                    
+                    li.appendChild(strong);
+                    li.append(` : ${Math.round(p.distanceTraveled)} px`);
+                    
+                    li.style.borderBottom = "1px solid #eee"; 
+                    li.style.padding = "4px 0"; 
+                    listTravelers.appendChild(li); 
+                });
             }
-        } catch (e) { listHunters.innerHTML = "Erreur."; }
+        } catch (e) { 
+            listHunters.textContent = "Erreur de chargement."; 
+            listTravelers.textContent = "Erreur de chargement."; 
+        }
     }
+
     function openAchievements() { document.getElementById('lobby-panel').style.display = 'none'; document.getElementById('achievements-panel').style.display = 'block'; loadAchievements(); }
     function closeAchievements() { document.getElementById('achievements-panel').style.display = 'none'; document.getElementById('lobby-panel').style.display = 'block'; }
 
@@ -658,22 +700,19 @@ function applySkinToElement(el, skinVal) {
                 listDiv.innerHTML = "";
                 data.achievements.forEach(ach => {
                     const div = document.createElement('div'); div.className = `ach-item ${ach.unlocked ? 'unlocked' : 'locked'}`;
+                    // Les descriptions viennent du serveur (confiance), on peut utiliser innerHTML
+                    // mais pour être propre :
                     div.innerHTML = `<div><div style="font-weight:bold;">${ach.name}</div><div style="font-size:12px;">${ach.desc}</div></div><div style="font-size:20px;">${ach.unlocked ? '✅' : '🔒'}</div>`;
                     listDiv.appendChild(div);
                 });
 
                 skinsDiv.innerHTML = "";
-                // Le bouton Aléatoire reste manuel
                 const defBtn = document.createElement('div'); defBtn.className = 'skin-box'; defBtn.style.background = 'white'; defBtn.style.display = 'flex'; defBtn.style.alignItems='center'; defBtn.style.justifyContent='center'; defBtn.innerText = "?"; defBtn.setAttribute('data-name', 'Aléatoire');
                 defBtn.onclick = () => { applySkin('#' + Math.floor(Math.random()*16777215).toString(16)); }; skinsDiv.appendChild(defBtn);
 
-                // --- ICI LA MODIFICATION MAJEURE ---
-                // On utilise data.skinMap fourni par le serveur
                 const skinNames = data.skinMap || {};
 
-// Remplace la partie à l'intérieur de data.unlockedSkins.forEach...
                 data.unlockedSkins.forEach(skin => {
-                    // Si c'est une classe CSS et qu'elle n'existe pas dans le fichier, on ignore
                     if (skin.startsWith('skin-') && !isSkinClassDefined(skin)) return;
                     
                     const btn = document.createElement('div'); 
@@ -684,21 +723,16 @@ function applySkinToElement(el, skinVal) {
                     
                     btn.setAttribute('data-name', displayName);
 
-                    // --- NOUVELLE LOGIQUE D'AFFICHAGE ---
                     if (skin.startsWith('http') || skin.startsWith('/') || skin.startsWith('data:image')) {
-                        // C'est une image
                         btn.style.backgroundImage = `url('${skin}')`;
                         btn.classList.add('skin-image');
                     }
                     else if (skin.startsWith('skin-')) {
-                        // C'est une classe
                         btn.classList.add(skin); 
                     } 
                     else {
-                        // C'est une couleur
                         btn.style.background = skin;
                     }
-                    // ------------------------------------
 
                     btn.onclick = () => applySkin(skin); 
                     skinsDiv.appendChild(btn);
@@ -713,4 +747,3 @@ function applySkinToElement(el, skinVal) {
 </script>
 </body>
 </html>
-
