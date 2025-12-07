@@ -107,6 +107,30 @@ const ACHIEVEMENTS = [
         condition: (u) => u.tagsInflicted >= 100,
         rewardSkin: 'skin-negative',
         skinName: 'Négatif'
+    },
+    { 
+        id: 'hiden',
+        name: 'Cube Caché',
+        desc: 'Être touché 100 fois',
+        condition: (u) => u.timesTagged >= 100,
+        rewardSkin: 'skin-hiden',
+        skinName: 'Cube Caché'
+    },
+    { 
+        id: 'triangle',
+        name: 'Cube Triangle?',
+        desc: 'Changer 5 fois de fond',
+        condition: (u) => u.backgroundsChanged >= 5,
+        rewardSkin: 'skin-triangle',
+        skinName: 'Cube Triangle?'
+    },
+    { 
+        id: 'eyes',
+        name: 'Cube 👁️👄👁️',
+        desc: 'Parcourir 4 000 000px', 
+        condition: (u) => u.distanceTraveled >= 4000000, 
+        rewardSkin: 'skin-eyes',
+        skinName: '👁️👄👁️'
     }
 ];
 

@@ -307,3 +307,25 @@
     /* Ombre portée pour le détacher du fond */
     box-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
 }
+
+.skin-hiden {
+    filter: invert(70%);
+}
+
+.skin-triangle {
+    background: radial-gradient(#e3975d, #df7126, #45283c);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.skin-eyes {
+    background-image: url('https://pixvid.org/images/2025/12/05/mDpWs.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    
+    image-rendering: pixelated;   
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+
+    background-color: transparent;
+}
