@@ -15,9 +15,9 @@ const rateLimit = require('express-rate-limit');
 
 const { ACHIEVEMENTS, SECRET_CODES } = require('./gameConfig');
 
-// --- SÉCURITÉ : HELMET (Headers HTTP) ---
+// --- SÉCURITÉ : HELMET ---
 app.use(helmet({
-    contentSecurityPolicy: false, // Désactivé pour éviter de bloquer les scripts inline de ton projet actuel
+    contentSecurityPolicy: false,
 }));
 
 // --- CONFIGURATION SKINS ---
@@ -32,8 +32,7 @@ Object.values(SECRET_CODES).forEach(code => {
 // --- SÉCURITÉ : SECRET JWT ---
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
-    console.error("🔴 ERREUR CRITIQUE : La variable JWT_SECRET est absente du fichier .env !");
-    console.error("Le serveur ne peut pas démarrer de manière sécurisée.");
+    console.error("🔴 ERREUR CRITIQUE : JWT_SECRET manquant !");
     process.exit(1);
 }
 
@@ -42,10 +41,12 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ Connecté à MongoDB'))
     .catch(err => console.error('❌ Erreur MongoDB:', err));
 
-// --- MODÈLE UTILISATEUR ---
+// --- MODÈLE UTILISATEUR (MODIFIÉ) ---
 const UserSchema = new mongoose.Schema({
     pseudo: { type: String, unique: true, required: true },
     password: { type: String, required: true },
+    isAdmin: { type: Boolean, default: false }, // <--- NOUVEAU : Droits Admin
+    isBanned: { type: Boolean, default: false }, // <--- NOUVEAU : Bannissement
     createdAt: { type: Date, default: Date.now },
     tagsInflicted: { type: Number, default: 0 },
     timesTagged: { type: Number, default: 0 },
@@ -61,28 +62,16 @@ const User = mongoose.model('User', UserSchema);
 
 const io = require('socket.io')(http, { maxHttpBufferSize: 5 * 1024 * 1024 });
 
-// --- SÉCURITÉ : RATE LIMITING (Limitation de débit) ---
-// Limiter les requêtes API générales
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limite chaque IP à 100 requêtes par fenêtre
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-// Limiter drastiquement les tentatives de connexion/inscription (Brute-force protection)
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // Max 10 tentatives de création de compte ou login
-    message: { success: false, message: "Trop de tentatives, réessayez plus tard." }
-});
+// --- RATE LIMITING ---
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { success: false, message: "Trop de tentatives." } });
 
-app.use(express.json({ limit: '10kb' })); // Limite la taille du body JSON
+app.use(express.json({ limit: '10kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/', apiLimiter); 
 
-// --- FONCTION UTILITAIRE : Échapper les Regex (Anti-Injection NoSQL) ---
 function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Échappe les caractères spéciaux
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // --- VARIABLES JEU ---
@@ -101,7 +90,7 @@ let lastTagTime = 0;
 const TAG_COOLDOWN = 1000; 
 let lastWolfMoveTime = Date.now();
 
-// --- HELPER: VÉRIFIER SUCCÈS ---
+// --- HELPERS ---
 async function checkAchievements(user, socketId) {
     let changed = false;
     let newUnlocks = [];
@@ -128,7 +117,6 @@ async function checkAchievements(user, socketId) {
     }
 }
 
-// --- HELPER: MIDDLEWARE AUTH API ---
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -140,6 +128,25 @@ function authenticateToken(req, res, next) {
     });
 }
 
+// --- MIDDLEWARE ADMIN (NOUVEAU) ---
+const verifyAdmin = async (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.sendStatus(401);
+
+    jwt.verify(token, JWT_SECRET, async (err, decoded) => {
+        if (err) return res.sendStatus(403);
+        try {
+            const user = await User.findById(decoded.id);
+            if (!user || !user.isAdmin) {
+                return res.status(403).json({ success: false, message: "Accès refusé." });
+            }
+            req.user = user;
+            next();
+        } catch (e) { res.sendStatus(500); }
+    });
+};
+
 // --- ROUTES API ---
 
 app.post('/api/register', authLimiter, async (req, res) => {
@@ -147,7 +154,6 @@ app.post('/api/register', authLimiter, async (req, res) => {
     if (!pseudo || !password) return res.json({ success: false, message: "Champs manquants." });
     if (pseudo.length > 12) return res.json({ success: false, message: "Pseudo trop long." });
     
-    // Nettoyage regex pour sécurité
     const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, 'i');
 
     try {
@@ -164,16 +170,20 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const { pseudo, password } = req.body;
     if (!pseudo || !password) return res.json({ success: false, message: "Champs manquants." });
 
-    // Nettoyage regex pour sécurité
     const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, 'i');
 
     try {
         const user = await User.findOne({ pseudo: { $regex: safePseudoRegex } });
         if (!user) return res.json({ success: false, message: "Utilisateur inconnu." });
+        
+        // VÉRIF BAN (NOUVEAU)
+        if (user.isBanned) return res.json({ success: false, message: "Ce compte est banni." });
+
         const match = await bcrypt.compare(password, user.password);
         if (match) {
             const token = jwt.sign({ id: user._id, pseudo: user.pseudo }, JWT_SECRET, { expiresIn: '7d' });
-            res.json({ success: true, token: token, pseudo: user.pseudo });
+            // On renvoie isAdmin pour l'UI
+            res.json({ success: true, token: token, pseudo: user.pseudo, isAdmin: user.isAdmin });
         }
         else res.json({ success: false, message: "Mot de passe incorrect." });
     } catch (error) { res.json({ success: false, message: "Erreur serveur." }); }
@@ -228,6 +238,65 @@ app.get('/api/my-achievements/:pseudo', async (req, res) => {
         });
     } catch (e) { res.json({ success: false }); }
 });
+
+// --- ROUTES ADMIN (NOUVEAU) ---
+
+// 1. Lister tous les utilisateurs
+app.get('/api/admin/users', verifyAdmin, async (req, res) => {
+    try {
+        // On récupère tout sauf le mot de passe
+        const users = await User.find().select('-password');
+        res.json({ success: true, users });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
+// 2. Modifier un utilisateur
+app.post('/api/admin/update-user', verifyAdmin, async (req, res) => {
+    const { userId, updates } = req.body;
+    try {
+        const target = await User.findById(userId);
+        if (!target) return res.json({ success: false, message: "User introuvable" });
+
+        // Sécurité : ne pas s'auto-bannir ou bannir un autre admin par erreur
+        if(target.isAdmin && updates.isBanned) {
+            return res.json({ success: false, message: "Impossible de bannir un admin." });
+        }
+
+        // Si changement de mot de passe demandé
+        if (updates.newPassword && updates.newPassword.trim() !== "") {
+            updates.password = await bcrypt.hash(updates.newPassword, 10);
+            delete updates.newPassword;
+        } else {
+            delete updates.newPassword;
+        }
+
+        await User.findByIdAndUpdate(userId, { $set: updates });
+        
+        // Si banni, on déconnecte de force
+        if (updates.isBanned) {
+             const sockets = await io.fetchSockets();
+             for (const s of sockets) {
+                 if (s.user && s.user.pseudo === target.pseudo) {
+                     s.emit('forceLobby', 'banned');
+                     s.disconnect(true);
+                 }
+             }
+        }
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// 3. Supprimer un utilisateur
+app.delete('/api/admin/user/:id', verifyAdmin, async (req, res) => {
+    try {
+        const target = await User.findById(req.params.id);
+        if(target && target.isAdmin) return res.json({ success: false, message: "On ne supprime pas un admin." });
+        
+        await User.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
 
 // --- SOCKET.IO ---
 async function removePlayerFromGame(socketId) {
@@ -284,8 +353,13 @@ io.on('connection', (socket) => {
         if (socket.user && socket.user.pseudo) {
             finalPseudo = socket.user.pseudo;
             try {
-                const user = await User.findOne({ pseudo: finalPseudo }).select('currentSkin');
+                const user = await User.findOne({ pseudo: finalPseudo });
                 if (user) {
+                    if (user.isBanned) {
+                        socket.emit('forceLobby', 'banned');
+                        socket.disconnect();
+                        return;
+                    }
                     await User.updateOne({ pseudo: finalPseudo }, { $inc: { gamesJoined: 1 } });
                     if (user.currentSkin) userColor = user.currentSkin; 
                 }

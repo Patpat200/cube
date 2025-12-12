@@ -55,11 +55,11 @@
         }
 
         #btn-leave {
-            position: fixed; top: 10px; left: 110px; z-index: 2000; /* Décalé à droite */
-            padding: 8px 12px; background: #fff; border: 2px solid #ccc; /* Même couleur que Menu */
+            position: fixed; top: 10px; left: 110px; z-index: 2000;
+            padding: 8px 12px; background: #fff; border: 2px solid #ccc; 
             border-radius: 5px; cursor: pointer; font-weight: bold; display: none;
         }
-        #btn-leave:hover { background: #eee; } /* Petit effet gris au survol */
+        #btn-leave:hover { background: #eee; }
 
         #ui-container {
             position: fixed; top: 50px; left: 10px;
@@ -161,6 +161,63 @@
         <div id="afk-msg" style="color: red; margin-top: 10px; font-weight: bold; display: none;">Vous avez été exclu pour inactivité (AFK)</div>
     </div>
 
+    <div id="admin-panel" class="panel-box" style="display:none; width: 600px; max-width: 95vw;">
+        <h2 style="color: #e74c3c;">PANEL ADMIN</h2>
+        <button onclick="closeAdmin()" style="float:right; background:none; border:none; color:black; cursor:pointer; font-size:20px; font-weight:bold;">×</button>
+        
+        <div style="margin-bottom: 15px; display:flex; gap:10px;">
+            <input type="text" id="admin-search" placeholder="Rechercher pseudo..." onkeyup="filterAdminList()" style="padding:5px; flex-grow:1;">
+            <button onclick="loadAdminUsers()" style="background:#2ecc71; color:white; border:none; padding:5px 10px; border-radius:4px;">Actualiser</button>
+        </div>
+
+        <div style="max-height: 300px; overflow-y: auto; background: white; border-radius: 5px;">
+            <table style="width:100%; border-collapse: collapse; font-size: 12px;">
+                <thead style="background:#ddd; position:sticky; top:0;">
+                    <tr>
+                        <th style="padding:5px;">Pseudo</th>
+                        <th>Tags</th>
+                        <th>Dist.</th>
+                        <th>Banni</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-users-list"></tbody>
+            </table>
+        </div>
+
+        <div id="admin-edit-form" style="display:none; text-align:left; margin-top:15px; padding-top:10px; border-top:1px solid #ccc;">
+            <h3 style="margin:0 0 10px 0;">Éditer : <span id="edit-pseudo-display"></span></h3>
+            <input type="hidden" id="edit-id">
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                <label>Tags Infligés: <input type="number" id="edit-tags"></label>
+                <label>Distance: <input type="number" id="edit-dist"></label>
+                <label>Morts: <input type="number" id="edit-deaths"></label>
+                <label>Parties: <input type="number" id="edit-games"></label>
+            </div>
+
+            <div style="margin-top:10px;">
+                <label style="display:block; font-weight:bold;">Skins (séparés par virgules) :</label>
+                <textarea id="edit-skins" style="width:100%; height:40px; font-size:10px;"></textarea>
+            </div>
+            <div style="margin-top:5px;">
+                <label style="display:block; font-weight:bold;">Succès (IDs séparés par virgules) :</label>
+                <textarea id="edit-achs" style="width:100%; height:40px; font-size:10px;"></textarea>
+            </div>
+
+            <div style="margin-top:10px; border:1px solid red; padding:5px; border-radius:4px;">
+                <label style="color:red; font-weight:bold;">Zone Danger :</label><br>
+                <input type="checkbox" id="edit-ban"> Bannir ce joueur<br>
+                <input type="text" id="edit-newpass" placeholder="Nouveau mot de passe (vide = inchangé)" style="width:100%; margin-top:5px;">
+            </div>
+
+            <div style="margin-top:10px; display:flex; justify-content:space-between;">
+                <button onclick="deleteUser()" style="background:red; color:white; border:none; padding:8px; border-radius:4px;">Supprimer Compte</button>
+                <button onclick="saveUserChanges()" style="background:blue; color:white; border:none; padding:8px; border-radius:4px;">Sauvegarder</button>
+            </div>
+        </div>
+    </div>
+
     <div id="achievements-panel" style="display:none; background: rgba(255,255,255,0.95); padding: 20px; border-radius: 10px; width: 400px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.6); max-height: 80vh; overflow-y: auto;">
         <h2 style="margin-top: 0; color: #333;">Succès & Skins</h2>
         <div id="achievements-list" style="text-align: left; margin-bottom: 20px;"></div>
@@ -247,12 +304,14 @@
                     const data = await res.json();
                     if (data.success) {
                         currentUserPseudo = data.pseudo;
+                        // On vérifie le statut admin stocké ou on pourrait le redemander
                         goToLobby(currentUserPseudo);
                         return;
                     }
                 } else {
                     console.log("Token invalide ou expiré");
                     localStorage.removeItem('cube_token');
+                    localStorage.removeItem('cube_is_admin');
                 }
             } catch(e) { console.error("Erreur auth auto", e); }
         }
@@ -300,6 +359,9 @@
             if (data.success) {
                 msg.innerText = "Succès !"; msg.style.color = "green";
                 localStorage.setItem('cube_token', data.token);
+                // Sauvegarde du statut admin (booléen renvoyé par le serveur)
+                localStorage.setItem('cube_is_admin', data.isAdmin);
+                
                 currentUserPseudo = data.pseudo;
                 socket.auth.token = data.token;
                 socket.disconnect().connect();
@@ -329,6 +391,7 @@
 
     function joinGameAsGuest() {
         localStorage.removeItem('cube_token');
+        localStorage.removeItem('cube_is_admin');
         socket.auth.token = null;
         socket.disconnect().connect();
         currentUserPseudo = "Invité"; 
@@ -339,7 +402,6 @@
         document.getElementById('auth-panel').style.display = 'none';
         document.getElementById('lobby-panel').style.display = 'block';
         document.getElementById('game-layer').classList.add('blurred');
-        // Protection XSS : usage de innerText au lieu de innerHTML/direct insertion si jamais
         document.getElementById('lobby-pseudo').innerText = pseudo;
         document.getElementById('afk-msg').style.display = 'none';
         document.getElementById('toggle-btn').style.display = 'none';
@@ -347,6 +409,27 @@
         document.getElementById('ui-container').style.display = 'none';
         document.getElementById('menu-overlay').classList.remove('hidden');
         isPlaying = false;
+        
+        // --- BOUTON ADMIN ---
+        const isAdmin = localStorage.getItem('cube_is_admin') === 'true';
+        let btnAdmin = document.getElementById('btn-admin-access');
+        if(isAdmin) {
+            if(!btnAdmin) {
+               btnAdmin = document.createElement('button');
+               btnAdmin.id = 'btn-admin-access';
+               btnAdmin.innerText = "🛠️ ADMIN";
+               btnAdmin.className = "lobby-btn";
+               btnAdmin.style.background = "#e74c3c";
+               btnAdmin.onclick = openAdmin;
+               // Insérer avant le bouton Logout
+               const logoutBtn = document.querySelector('.btn-logout');
+               logoutBtn.parentNode.insertBefore(btnAdmin, logoutBtn);
+            }
+            btnAdmin.style.display = 'block';
+        } else {
+            if(btnAdmin) btnAdmin.style.display = 'none';
+        }
+
         if(myId) { socket.emit('leaveGame'); myId = null; }
     }
 
@@ -362,12 +445,12 @@
 
     function doLogout() {
         localStorage.removeItem('cube_token');
+        localStorage.removeItem('cube_is_admin');
         currentUserPseudo = "Invité";
         location.reload();
     }
 
     function applySkinToElement(el, skinVal) {
-        // 1. Réinitialisation complète
         el.style.background = '';
         el.style.backgroundImage = '';
         el.className.split(' ').forEach(c => { 
@@ -376,16 +459,13 @@
 
         if (!skinVal) return;
 
-        // 2. CAS IMAGE (URL Web ou chemin local)
         if (skinVal.startsWith('http') || skinVal.startsWith('/') || skinVal.startsWith('data:image')) {
             el.style.backgroundImage = `url('${skinVal}')`;
-            el.classList.add('skin-image'); // Ajoute la classe CSS créée à l'étape 1
+            el.classList.add('skin-image');
         }
-        // 3. CAS CLASSE CSS (ex: skin-rainbow)
         else if (skinVal.startsWith('skin-')) {
             el.classList.add(skinVal);
         }
-        // 4. CAS COULEUR SIMPLE (ex: #ff0000)
         else {
             el.style.background = skinVal;
         }
@@ -414,6 +494,7 @@
         createCube(myId, info);
     });
     socket.on('forceLobby', (reason) => {
+        if(reason === 'banned') alert("Vous avez été banni du jeu.");
         goToLobby(currentUserPseudo);
         if(reason === 'afk') document.getElementById('afk-msg').style.display = 'block';
     });
@@ -425,9 +506,6 @@
     socket.on('codeError', (msg) => { alert("Code Erreur : " + msg); });
     function showToast(title, desc) {
         const toast = document.getElementById('ach-toast');
-        // Attention : title et desc viennent du serveur (via la config gameConfig.js), donc de confiance.
-        // Si desc est injecté, il faut innerText, mais on veut garder le formatage.
-        // Comme les succès sont hardcodés côté serveur, c'est acceptable ici, mais pour plus de sécu :
         const str = `<strong>${title}</strong><br>${desc}`;
         document.getElementById('ach-toast-msg').innerHTML = str;
         toast.style.right = "20px"; setTimeout(() => { toast.style.right = "-300px"; }, 4000);
@@ -503,7 +581,6 @@
             let potentialX = myX, potentialY = myY, moved = false;
             const step = speedPerSec * (dt / 1000);
             
-            // Calcul des mouvements...
             if (keysPressed.ArrowUp) { potentialY -= step; moved = true; }
             if (keysPressed.ArrowDown) { potentialY += step; moved = true; }
             if (keysPressed.ArrowLeft) { potentialX -= step; moved = true; }
@@ -517,13 +594,11 @@
                 myX = resolved.x; myY = resolved.y;
                 if (playersDOM[myId]) playersDOM[myId].style.transform = `translate3d(${myX}px, ${myY}px, 0)`;
                 
-                // Envoi régulier (toutes les 20ms)
                 if ((Date.now() - lastEmitTime) > emitThrottleMs) { 
                     lastEmitTime = Date.now(); 
                     socket.emit('playerMovement', { x: Math.round(myX), y: Math.round(myY) }); 
                 }
             } 
-            // Si on ne bouge plus MAIS qu'on bougeait juste avant
             else if (wasMoving) {
                 socket.emit('playerMovement', { x: Math.round(myX), y: Math.round(myY) });
             }
@@ -531,7 +606,6 @@
             wasMoving = moved;
         }
 
-        // Interpolation des autres joueurs
         for (const id in playersData) {
             if (id === myId) continue;
             const p = playersData[id], lerpFactor = Math.min(1, (dt / 1000) * 15);
@@ -622,8 +696,6 @@
         } catch (e) { msgDiv.innerText = "Erreur."; }
     }
     
-    // --- CORRECTION MAJEURE ICI : PROTECTION XSS ---
-    // Utilisation de textContent au lieu de innerHTML pour les données utilisateurs
     async function loadLeaderboard() {
         const listHunters = document.getElementById('list-hunters'); 
         const listTravelers = document.getElementById('list-travelers');
@@ -635,35 +707,26 @@
             const res = await fetch('/api/leaderboard');
             const data = await res.json();
             if (data.success) {
-                // Vider les listes
                 listHunters.innerHTML = "";
                 listTravelers.innerHTML = "";
 
-                // Construction sécurisée (Top Chasseurs)
                 data.hunters.forEach((p, i) => { 
                     const li = document.createElement('li');
-                    
                     const strong = document.createElement('strong');
-                    strong.textContent = `#${i+1} ${p.pseudo}`; // Sécurisé
-                    
+                    strong.textContent = `#${i+1} ${p.pseudo}`;
                     li.appendChild(strong);
                     li.append(` : ${p.tagsInflicted} tags`);
-                    
                     li.style.borderBottom = "1px solid #eee"; 
                     li.style.padding = "4px 0"; 
                     listHunters.appendChild(li); 
                 });
 
-                // Construction sécurisée (Top Voyageurs)
                 data.travelers.forEach((p, i) => { 
                     const li = document.createElement('li');
-                    
                     const strong = document.createElement('strong');
-                    strong.textContent = `#${i+1} ${p.pseudo}`; // Sécurisé
-                    
+                    strong.textContent = `#${i+1} ${p.pseudo}`;
                     li.appendChild(strong);
                     li.append(` : ${Math.round(p.distanceTraveled)} px`);
-                    
                     li.style.borderBottom = "1px solid #eee"; 
                     li.style.padding = "4px 0"; 
                     listTravelers.appendChild(li); 
@@ -700,8 +763,6 @@
                 listDiv.innerHTML = "";
                 data.achievements.forEach(ach => {
                     const div = document.createElement('div'); div.className = `ach-item ${ach.unlocked ? 'unlocked' : 'locked'}`;
-                    // Les descriptions viennent du serveur (confiance), on peut utiliser innerHTML
-                    // mais pour être propre :
                     div.innerHTML = `<div><div style="font-weight:bold;">${ach.name}</div><div style="font-size:12px;">${ach.desc}</div></div><div style="font-size:20px;">${ach.unlocked ? '✅' : '🔒'}</div>`;
                     listDiv.appendChild(div);
                 });
@@ -714,32 +775,159 @@
 
                 data.unlockedSkins.forEach(skin => {
                     if (skin.startsWith('skin-') && !isSkinClassDefined(skin)) return;
-                    
-                    const btn = document.createElement('div'); 
-                    btn.className = 'skin-box';
-                    
-                    let displayName = skinNames[skin]; 
-                    if (!displayName) displayName = skin.startsWith('#') ? "Couleur" : "Skin";
-                    
+                    const btn = document.createElement('div'); btn.className = 'skin-box';
+                    let displayName = skinNames[skin]; if (!displayName) displayName = skin.startsWith('#') ? "Couleur" : "Skin";
                     btn.setAttribute('data-name', displayName);
-
                     if (skin.startsWith('http') || skin.startsWith('/') || skin.startsWith('data:image')) {
-                        btn.style.backgroundImage = `url('${skin}')`;
-                        btn.classList.add('skin-image');
+                        btn.style.backgroundImage = `url('${skin}')`; btn.classList.add('skin-image');
                     }
-                    else if (skin.startsWith('skin-')) {
-                        btn.classList.add(skin); 
-                    } 
-                    else {
-                        btn.style.background = skin;
-                    }
-
-                    btn.onclick = () => applySkin(skin); 
-                    skinsDiv.appendChild(btn);
+                    else if (skin.startsWith('skin-')) { btn.classList.add(skin); } 
+                    else { btn.style.background = skin; }
+                    btn.onclick = () => applySkin(skin); skinsDiv.appendChild(btn);
                 });
             }
         } catch(e) { console.error(e); }
     }
+
+    // --- LOGIQUE ADMIN JS ---
+    let allUsersCache = [];
+    let currentEditId = null;
+
+    function openAdmin() {
+        document.getElementById('lobby-panel').style.display = 'none';
+        document.getElementById('admin-panel').style.display = 'block';
+        loadAdminUsers();
+    }
+    
+    function closeAdmin() {
+        document.getElementById('admin-panel').style.display = 'none';
+        document.getElementById('lobby-panel').style.display = 'block';
+    }
+
+    async function loadAdminUsers() {
+        const token = localStorage.getItem('cube_token');
+        try {
+            const res = await fetch('/api/admin/users', { headers: { 'Authorization': 'Bearer ' + token } });
+            const data = await res.json();
+            if(data.success) {
+                allUsersCache = data.users;
+                renderAdminList(allUsersCache);
+            } else {
+                alert("Erreur chargement ou accès interdit.");
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function renderAdminList(users) {
+        const tbody = document.getElementById('admin-users-list');
+        tbody.innerHTML = "";
+        users.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding:5px; border-bottom:1px solid #eee;">
+                    <strong>${u.pseudo}</strong> 
+                    ${u.isAdmin ? '⭐' : ''}
+                </td>
+                <td style="border-bottom:1px solid #eee;">${u.tagsInflicted}</td>
+                <td style="border-bottom:1px solid #eee;">${Math.round(u.distanceTraveled)}</td>
+                <td style="border-bottom:1px solid #eee; color:${u.isBanned ? 'red':'green'}">${u.isBanned ? 'OUI':'NON'}</td>
+                <td style="border-bottom:1px solid #eee;">
+                    <button onclick="editUser('${u._id}')" style="font-size:10px;">Éditer</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function filterAdminList() {
+        const term = document.getElementById('admin-search').value.toLowerCase();
+        const filtered = allUsersCache.filter(u => u.pseudo.toLowerCase().includes(term));
+        renderAdminList(filtered);
+    }
+
+    function editUser(id) {
+        const user = allUsersCache.find(u => u._id === id);
+        if(!user) return;
+        currentEditId = id;
+
+        document.getElementById('admin-edit-form').style.display = 'block';
+        document.getElementById('edit-pseudo-display').innerText = user.pseudo;
+        document.getElementById('edit-id').value = user._id;
+        
+        document.getElementById('edit-tags').value = user.tagsInflicted || 0;
+        document.getElementById('edit-dist').value = user.distanceTraveled || 0;
+        document.getElementById('edit-deaths').value = user.timesTagged || 0;
+        document.getElementById('edit-games').value = user.gamesJoined || 0;
+        
+        document.getElementById('edit-skins').value = (user.unlockedSkins || []).join(', ');
+        document.getElementById('edit-achs').value = (user.achievements || []).join(', ');
+        
+        document.getElementById('edit-ban').checked = user.isBanned || false;
+        document.getElementById('edit-newpass').value = "";
+    }
+
+    async function saveUserChanges() {
+        if(!currentEditId) return;
+        if(!confirm("Appliquer les modifications ?")) return;
+
+        const token = localStorage.getItem('cube_token');
+        
+        const updates = {
+            tagsInflicted: parseInt(document.getElementById('edit-tags').value),
+            distanceTraveled: parseInt(document.getElementById('edit-dist').value),
+            timesTagged: parseInt(document.getElementById('edit-deaths').value),
+            gamesJoined: parseInt(document.getElementById('edit-games').value),
+            isBanned: document.getElementById('edit-ban').checked,
+            unlockedSkins: document.getElementById('edit-skins').value.split(',').map(s => s.trim()).filter(s => s),
+            achievements: document.getElementById('edit-achs').value.split(',').map(s => s.trim()).filter(s => s)
+        };
+
+        const newPass = document.getElementById('edit-newpass').value;
+        if(newPass) updates.newPassword = newPass;
+
+        try {
+            const res = await fetch('/api/admin/update-user', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ userId: currentEditId, updates })
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert("Sauvegardé !");
+                document.getElementById('admin-edit-form').style.display = 'none';
+                loadAdminUsers();
+            } else {
+                alert("Erreur : " + data.message);
+            }
+        } catch(e) { alert("Erreur serveur"); }
+    }
+
+    async function deleteUser() {
+        if(!currentEditId) return;
+        if(!confirm("ATTENTION : Cette action est IRRÉVERSIBLE. Supprimer le compte ?")) return;
+        
+        const token = localStorage.getItem('cube_token');
+        try {
+             const res = await fetch('/api/admin/user/' + currentEditId, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if(res.ok) {
+                const data = await res.json();
+                if(data.success) {
+                    alert("Utilisateur supprimé.");
+                    document.getElementById('admin-edit-form').style.display = 'none';
+                    loadAdminUsers();
+                } else {
+                    alert("Impossible : " + data.message);
+                }
+            }
+        } catch(e) { alert("Erreur"); }
+    }
+
     document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h' && document.activeElement.tagName !== 'INPUT') toggleUI(); if (e.key.toLowerCase() === 'l' && isPlaying) tryLeaveGame(); if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = true; });
     document.addEventListener('keyup', (e) => { if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = false; });
     let lastFrameTime = performance.now();
