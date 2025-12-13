@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const app = express();
-app.set('trust proxy', 1); // Important pour récupérer la vraie IP sur Render
+app.set('trust proxy', 1);
 const http = require('http').createServer(app);
 const path = require('path');
 const axios = require('axios');
@@ -619,15 +619,20 @@ setInterval(() => {
     }
 }, 1000);
 
-// Stats graphiques (1min)
-
-// Stats graphiques (1min) - Avec protection anti-doublon
+// Stats graphiques (1min) - Optimisé
 const saveGraphStats = async () => {
-    const last = await ConnStat.findOne().sort({ timestamp: -1 });
-    // Si la dernière stat date de moins de 55 secondes, on n'en crée pas de nouvelle
-    if (last && (Date.now() - last.timestamp) < 55000) return;
-    
-    await ConnStat.create({ count: Object.keys(players).length }); 
+    try {
+        const count = Object.keys(players).length;
+        const last = await ConnStat.findOne().sort({ timestamp: -1 });
+
+        // Protection anti-spam (moins de 55s)
+        if (last && (Date.now() - last.timestamp) < 55000) return;
+
+        // Si le nombre de joueurs est identique au dernier enregistrement, on ignore
+        if (last && last.count === count) return;
+        
+        await ConnStat.create({ count });
+    } catch (e) { console.error("Erreur stats:", e); }
 };
 saveGraphStats(); 
 setInterval(saveGraphStats, 60 * 1000);
