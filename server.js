@@ -637,6 +637,14 @@ const saveGraphStats = async () => {
 saveGraphStats(); 
 setInterval(saveGraphStats, 60 * 1000);
 
+// Nettoyage automatique des stats > 24h (Toutes les heures)
+setInterval(async () => {
+    try {
+        const limitDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        await ConnStat.deleteMany({ timestamp: { $lt: limitDate } });
+    } catch (e) { console.error("Erreur nettoyage stats:", e); }
+}, 60 * 60 * 1000);
+
 // Sauvegarde distances
 setInterval(async () => {
     for (const id in players) {
