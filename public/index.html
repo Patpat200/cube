@@ -790,42 +790,101 @@
     }
 
     async function loadAchievements() {
-        const listDiv = document.getElementById('achievements-list'); const skinsDiv = document.getElementById('skins-container');
-        listDiv.innerHTML = "Chargement...";
-        if (!currentUserPseudo || currentUserPseudo === "Invité") { listDiv.innerHTML = "Connecte-toi pour voir tes succès."; skinsDiv.innerHTML = ""; return; }
-        try {
-            const res = await fetch('/api/my-achievements/' + encodeURIComponent(currentUserPseudo));
-            const data = await res.json();
+            const listDiv = document.getElementById('achievements-list'); 
+            const skinsDiv = document.getElementById('skins-container');
             
-            if (data.success) {
-                listDiv.innerHTML = "";
-                data.achievements.forEach(ach => {
-                    const div = document.createElement('div'); div.className = `ach-item ${ach.unlocked ? 'unlocked' : 'locked'}`;
-                    div.innerHTML = `<div><div style="font-weight:bold;">${ach.name}</div><div style="font-size:12px;">${ach.desc}</div></div><div style="font-size:20px;">${ach.unlocked ? '✅' : '🔒'}</div>`;
-                    listDiv.appendChild(div);
-                });
-
-                skinsDiv.innerHTML = "";
-                const defBtn = document.createElement('div'); defBtn.className = 'skin-box'; defBtn.style.background = 'white'; defBtn.style.display = 'flex'; defBtn.style.alignItems='center'; defBtn.style.justifyContent='center'; defBtn.innerText = "?"; defBtn.setAttribute('data-name', 'Aléatoire');
-                defBtn.onclick = () => { applySkin('#' + Math.floor(Math.random()*16777215).toString(16)); }; skinsDiv.appendChild(defBtn);
-
-                const skinNames = data.skinMap || {};
-
-                data.unlockedSkins.forEach(skin => {
-                    if (skin.startsWith('skin-') && !isSkinClassDefined(skin)) return;
-                    const btn = document.createElement('div'); btn.className = 'skin-box';
-                    let displayName = skinNames[skin]; if (!displayName) displayName = skin.startsWith('#') ? "Couleur" : "Skin";
-                    btn.setAttribute('data-name', displayName);
-                    if (skin.startsWith('http') || skin.startsWith('/') || skin.startsWith('data:image')) {
-                        btn.style.backgroundImage = `url('${skin}')`; btn.classList.add('skin-image');
-                    }
-                    else if (skin.startsWith('skin-')) { btn.classList.add(skin); } 
-                    else { btn.style.background = skin; }
-                    btn.onclick = () => applySkin(skin); skinsDiv.appendChild(btn);
-                });
+            listDiv.innerHTML = "Chargement...";
+            
+            // Si pas connecté ou Invité, on arrête tout de suite
+            if (!currentUserPseudo || currentUserPseudo === "Invité") { 
+                listDiv.innerHTML = "Connecte-toi pour voir tes succès."; 
+                skinsDiv.innerHTML = ""; 
+                return; 
             }
-        } catch(e) { console.error(e); }
-    }
+
+            try {
+                const res = await fetch('/api/my-achievements/' + encodeURIComponent(currentUserPseudo));
+                const data = await res.json();
+                
+                if (data.success) {
+                    // 1. AFFICHER LA LISTE DES SUCCÈS (Texte)
+                    listDiv.innerHTML = "";
+                    data.achievements.forEach(ach => {
+                        const div = document.createElement('div'); 
+                        div.className = `ach-item ${ach.unlocked ? 'unlocked' : 'locked'}`;
+                        div.innerHTML = `
+                            <div>
+                                <div style="font-weight:bold;">${ach.name}</div>
+                                <div style="font-size:12px;">${ach.desc}</div>
+                            </div>
+                            <div style="font-size:20px;">${ach.unlocked ? '✅' : '🔒'}</div>
+                        `;
+                        listDiv.appendChild(div);
+                    });
+
+                    // 2. AFFICHER LES SKINS (Carrés)
+                    skinsDiv.innerHTML = "";
+
+                    // -- Bouton "Aléatoire" (?) --
+                    const defBtn = document.createElement('div'); 
+                    defBtn.className = 'skin-box'; 
+                    defBtn.style.background = 'white'; 
+                    defBtn.style.display = 'flex'; 
+                    defBtn.style.alignItems='center'; 
+                    defBtn.style.justifyContent='center'; 
+                    defBtn.innerText = "?"; 
+                    defBtn.setAttribute('data-name', 'Aléatoire');
+                    defBtn.onclick = () => { applySkin('#' + Math.floor(Math.random()*16777215).toString(16)); }; 
+                    skinsDiv.appendChild(defBtn);
+
+                    const skinNames = data.skinMap || {};
+
+                    // -- NETTOYAGE DES DONNÉES --
+                    // On enlève les doublons et les valeurs vides
+                    const uniqueSkins = [...new Set(data.unlockedSkins)].filter(s => s && s.trim() !== "");
+
+                    uniqueSkins.forEach(skin => {
+                        // Sécurité 1 : Si c'est une classe CSS (ex: skin-neon) qui n'existe pas dans le fichier CSS, on ignore.
+                        if (skin.startsWith('skin-') && !isSkinClassDefined(skin)) return;
+
+                        const btn = document.createElement('div'); 
+                        btn.className = 'skin-box';
+                        
+                        // Trouver le nom joli (ex: "Néon Futuriste") sinon afficher "Skin" ou "Couleur"
+                        let displayName = skinNames[skin]; 
+                        if (!displayName) displayName = skin.startsWith('#') ? "Couleur" : "Skin";
+                        btn.setAttribute('data-name', displayName);
+
+                        // Gestion de l'affichage selon le type de skin
+                        if (skin.startsWith('http') || skin.startsWith('/') || skin.startsWith('data:image')) {
+                            // C'est une image (URL)
+                            btn.style.backgroundImage = `url('${skin}')`; 
+                            btn.classList.add('skin-image');
+                        }
+                        else if (skin.startsWith('skin-')) { 
+                            // C'est une classe CSS
+                            btn.classList.add(skin); 
+                        } 
+                        else { 
+                            // C'est probablement une couleur (Hex, RGB, nom...)
+                            btn.style.background = skin;
+                            
+                            // Sécurité 2 : Si le navigateur n'a pas réussi à appliquer la couleur (car invalide), on n'affiche pas le bouton.
+                            if (btn.style.background === "" && skin !== "") {
+                                return; 
+                            }
+                        }
+                        
+                        // Au clic, on applique le skin
+                        btn.onclick = () => applySkin(skin); 
+                        skinsDiv.appendChild(btn);
+                    });
+                }
+            } catch(e) { 
+                console.error(e); 
+                listDiv.innerHTML = "Erreur de chargement.";
+            }
+        }
 
     // --- LOGIQUE ADMIN JS ---
     let allUsersCache = [];
