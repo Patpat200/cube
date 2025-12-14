@@ -453,6 +453,10 @@
         document.getElementById('btn-leave').style.display = 'none';
         document.getElementById('ui-container').style.display = 'none';
         document.getElementById('menu-overlay').classList.remove('hidden');
+
+        const kofiWidget = document.querySelector('.floatingchat-container-wrap');
+        if(kofiWidget) kofiWidget.style.display = 'block';
+        
         isPlaying = false;
         
         // SECURITE : On utilise la variable mémoire, pas localStorage
@@ -483,6 +487,10 @@
         document.getElementById('toggle-btn').style.display = 'block';
         document.getElementById('btn-leave').style.display = 'block';
         document.getElementById('ui-container').style.display = 'flex';
+
+        const kofiWidget = document.querySelector('.floatingchat-container-wrap'); // C'est la classe utilisée par Ko-fi
+        if(kofiWidget) kofiWidget.style.display = 'none';
+
         socket.emit('joinGame');
         isPlaying = true;
     }
@@ -1099,5 +1107,32 @@
     let lastFrameTime = performance.now();
     initFxCanvas(); requestAnimationFrame(animate);
 </script>
+
+<script src='https://storage.ko-fi.com/cdn/scripts/overlay-widget.js'></script>
+<script>
+  // On attend que la page soit chargée
+  window.addEventListener('load', function() {
+      kofiWidgetOverlay.draw('patpat_', {
+        'type': 'floating-chat',
+        'floating-chat.donateButton.text': 'Me soutenir',
+        'floating-chat.donateButton.background-color': '#29abe0',
+        'floating-chat.donateButton.text-color': '#fff'
+      });
+
+
+      setTimeout(() => {
+          const kofiDiv = document.querySelector('.floatingchat-container-wrap');
+          if(kofiDiv) {
+              kofiDiv.style.bottom = "20px";
+              kofiDiv.style.right = "20px";
+              
+              kofiDiv.style.zIndex = "10000"; 
+          }
+      }, 1000); // On attend 1s que le widget soit créé par Ko-fi
+  });
+</script>
+
+
+
 </body>
 </html>
