@@ -89,4 +89,3 @@ Le serveur écoute par défaut sur le port `2220` si `PORT` n'est pas défini.
 **Star History**
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Patpat200/cube&type=date&legend=top-left)](https://www.star-history.com/#Patpat200/cube&type=date&legend=top-left)
-
