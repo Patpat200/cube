@@ -278,6 +278,16 @@ app.get('/api/my-achievements/:pseudo', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
+// --- CONFIGURATION ADSENSE (Option B) ---
+app.get('/api/ads-config', (req, res) => {
+    // On renvoie l'ID Client et l'ID du Slot (bloc d'annonce) si définis
+    res.json({ 
+        clientId: process.env.ADSENSE_CLIENT_ID || null,
+        slotId: process.env.ADSENSE_SLOT_ID || null
+    });
+});
+
+
 // --- ROUTES ADMIN ---
 
 // 1. Dashboard
