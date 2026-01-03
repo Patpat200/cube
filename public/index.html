@@ -128,11 +128,7 @@
 </div>
 
 <div id="menu-overlay">
-    <a href="privacy.html" target="_blank" style="position: absolute; bottom: 15px; right: 15px; color: rgba(255,255,255,0.6); font-size: 12px; text-decoration: none; z-index: 5000;">Politique de Confidentialité</a>
-
     <h1 style="color:white; text-shadow:2px 2px 4px black; margin-bottom: 20px;">CUBE TAG</h1>
-
-
     
     <div id="auth-panel" class="panel-box">
         <div style="margin-bottom: 15px; display: flex; justify-content: space-around; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
@@ -382,60 +378,6 @@
             localStorage.removeItem('cube_token');
             isSessionAdmin = false;
         }
-
-
-
-
-
-
-        // --- GESTION DYNAMIQUE DES PUBS (Option B) ---
-    async function initAdSense() {
-        try {
-            // 1. Récupérer la config depuis le serveur
-            const res = await fetch('/api/ads-config');
-            const config = await res.json();
-
-            if (config.clientId) {
-                console.log("Chargement AdSense...");
-
-                // 2. Injecter le script officiel Google
-                const script = document.createElement('script');
-                script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${config.clientId}`;
-                script.async = true;
-                script.crossOrigin = "anonymous";
-                document.head.appendChild(script);
-
-                // 3. Créer le bloc d'annonce si un Slot ID est fourni
-                const container = document.getElementById('ad-container');
-                if (container && config.slotId) {
-                    container.innerHTML = ''; // Nettoie le placeholder
-                    
-                    const ins = document.createElement('ins');
-                    ins.className = 'adsbygoogle';
-                    ins.style.display = 'inline-block';
-                    ins.style.width = '300px';
-                    ins.style.height = '250px';
-                    ins.setAttribute('data-ad-client', config.clientId);
-                    ins.setAttribute('data-ad-slot', config.slotId);
-                    
-                    container.appendChild(ins);
-                    
-                    // Déclenche l'affichage
-                    (window.adsbygoogle = window.adsbygoogle || []).push({});
-                }
-            } else {
-                // Pas de pub configurée (Localhost ou pas de variables d'env)
-                const container = document.getElementById('ad-container');
-                if(container) container.style.display = 'none'; // On cache la zone vide
-            }
-        } catch (e) {
-            console.warn("Impossible de charger la config pub", e);
-        }
-    }
-
-    // Lancer l'initialisation
-    initAdSense();
-
     });
 
     function showForm(type) {
