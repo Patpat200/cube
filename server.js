@@ -1,31 +1,43 @@
-require('dotenv').config();
-const express = require('express');
+require("dotenv").config();
+const express = require("express");
 const app = express();
-app.set('trust proxy', 1);
-const http = require('http').createServer(app);
-const path = require('path');
-const axios = require('axios');
-const FormData = require('form-data');
-const bcrypt = require('bcryptjs');
-const mongoose = require('mongoose');
-const sharp = require('sharp');
-const jwt = require('jsonwebtoken');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+app.set("trust proxy", 1);
+const http = require("http").createServer(app);
+const path = require("path");
+const axios = require("axios");
+const FormData = require("form-data");
+const bcrypt = require("bcryptjs");
+const mongoose = require("mongoose");
+const sharp = require("sharp");
+const jwt = require("jsonwebtoken");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 
-const { ACHIEVEMENTS, SECRET_CODES } = require('./gameConfig');
-
+const {
+    ACHIEVEMENTS,
+    SECRET_CODES,
+    POWERUP_TYPES,
+    ROOM_CONFIG,
+    XP_CONFIG,
+    OBSTACLES,
+    PORTALS,
+    SHOP_SKINS,
+    COIN_REWARDS,
+} = require("./gameConfig");
 // --- SÉCURITÉ : HELMET ---
-app.use(helmet({
-    contentSecurityPolicy: false,
-}));
+app.use(
+    helmet({
+        contentSecurityPolicy: false,
+    }),
+);
 
 // --- CONFIGURATION SKINS ---
 const ALL_SKIN_NAMES = {};
-ACHIEVEMENTS.forEach(ach => {
-    if (ach.rewardSkin && ach.skinName) ALL_SKIN_NAMES[ach.rewardSkin] = ach.skinName;
+ACHIEVEMENTS.forEach((ach) => {
+    if (ach.rewardSkin && ach.skinName)
+        ALL_SKIN_NAMES[ach.rewardSkin] = ach.skinName;
 });
-Object.values(SECRET_CODES).forEach(code => {
+Object.values(SECRET_CODES).forEach((code) => {
     if (code.skin && code.name) ALL_SKIN_NAMES[code.skin] = code.name;
 });
 
@@ -37,9 +49,10 @@ if (!JWT_SECRET) {
 }
 
 // --- CONNEXION MONGODB ---
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('✅ Connecté à MongoDB'))
-    .catch(err => console.error('❌ Erreur MongoDB:', err));
+mongoose
+    .connect(process.env.MONGO_URI)
+    .then(() => console.log("✅ Connecté à MongoDB"))
+    .catch((err) => console.error("❌ Erreur MongoDB:", err));
 
 // --- MODÈLES ---
 
@@ -56,11 +69,14 @@ const UserSchema = new mongoose.Schema({
     distanceTraveled: { type: Number, default: 0 },
     backgroundsChanged: { type: Number, default: 0 },
     currentSkin: { type: String, default: null },
-    achievements: { type: [String], default: [] }, 
+    achievements: { type: [String], default: [] },
     unlockedSkins: { type: [String], default: [] },
-    redeemedCodes: { type: [String], default: [] }
+    redeemedCodes: { type: [String], default: [] },
+    xp: { type: Number, default: 0 },
+    level: { type: Number, default: 1 },
+    coins: { type: Number, default: 0 },
 });
-const User = mongoose.model('User', UserSchema);
+const User = mongoose.model("User", UserSchema);
 
 // 2. LOGS ADMIN
 const LogSchema = new mongoose.Schema({
@@ -68,51 +84,251 @@ const LogSchema = new mongoose.Schema({
     admin: String,
     target: String,
     details: String,
-    timestamp: { type: Date, default: Date.now }
+    timestamp: { type: Date, default: Date.now },
 });
-const Log = mongoose.model('Log', LogSchema);
+const Log = mongoose.model("Log", LogSchema);
 
 // 3. BANS IP
 const BannedIpSchema = new mongoose.Schema({
     ip: String,
     reason: String,
-    date: { type: Date, default: Date.now }
+    date: { type: Date, default: Date.now },
 });
-const BannedIP = mongoose.model('BannedIP', BannedIpSchema);
+const BannedIP = mongoose.model("BannedIP", BannedIpSchema);
 
 // 4. STATS CONNEXION (Graphiques)
 const ConnStatSchema = new mongoose.Schema({
     count: Number,
-    timestamp: { type: Date, default: Date.now }
+    timestamp: { type: Date, default: Date.now },
 });
-const ConnStat = mongoose.model('ConnStat', ConnStatSchema);
+const ConnStat = mongoose.model("ConnStat", ConnStatSchema);
 
-
-const io = require('socket.io')(http, { maxHttpBufferSize: 5 * 1024 * 1024 });
+const io = require("socket.io")(http, { maxHttpBufferSize: 5 * 1024 * 1024 });
 
 // --- VARIABLES JEU ---
 let players = {};
-let currentBackground = null; 
-let wolfId = null; 
-let uploadCooldowns = {}; 
+let currentBackground = null;
+let wolfId = null;
+let uploadCooldowns = {};
+
+// --- ROOMS ---
+let rooms = {};
+ROOM_CONFIG.rooms.forEach((name) => {
+    rooms[name] = {
+        players: {},
+        wolfId: null,
+        lastWolfMoveTime: Date.now(),
+        background: null,
+    };
+});
+
+// --- POWER-UPS ---
+let activePowerups = {}; // { roomName: [{ id, type, x, y, spawnTime }] }
+ROOM_CONFIG.rooms.forEach((name) => {
+    activePowerups[name] = [];
+});
+
+// --- INFECTION MODE ---
+let infectionMode = {}; // { roomName: bool }
+ROOM_CONFIG.rooms.forEach((name) => {
+    infectionMode[name] = false;
+});
+
+// --- MANCHES ---
+const ROUND_DURATION = 5 * 60 * 1000; // 5 minutes
+let roundTimers = {};
+
+function generateObstacles() {
+    const obs = [];
+    const count = 4 + Math.floor(Math.random() * 5); // 4 à 8 obstacles
+    for (let i = 0; i < count; i++) {
+        const isHorizontal = Math.random() > 0.5;
+        obs.push({
+            x: Math.floor(Math.random() * 900) + 80,
+            y: Math.floor(Math.random() * 450) + 80,
+            w: isHorizontal ? 60 + Math.floor(Math.random() * 80) : 20,
+            h: isHorizontal ? 20 : 60 + Math.floor(Math.random() * 80),
+        });
+    }
+    return obs;
+}
+
+function generatePortals() {
+    const margin = 80;
+    const maxX = 1200 - margin;
+    const maxY = 650 - margin;
+    return [
+        {
+            id: "A",
+            x: Math.floor(Math.random() * (maxX / 2)),
+            y: Math.floor(Math.random() * maxY) + margin,
+            pairId: "B",
+        },
+        {
+            id: "B",
+            x: Math.floor(Math.random() * (maxX / 2)) + maxX / 2,
+            y: Math.floor(Math.random() * maxY) + margin,
+            pairId: "A",
+        },
+    ];
+}
+
+// Obstacles dynamiques par room
+let roomObstacles = {};
+ROOM_CONFIG.rooms.forEach((name) => {
+    roomObstacles[name] = generateObstacles();
+});
+
+let roomPortals = {};
+ROOM_CONFIG.rooms.forEach((name) => {
+    roomPortals[name] = generatePortals();
+});
+
+async function startRound(roomName) {
+    const room = rooms[roomName];
+    if (!room) return;
+
+    // Nouveaux obstacles
+    roomObstacles[roomName] = generateObstacles();
+    roomPortals[roomName] = generatePortals();
+    io.to(roomName).emit("newRound", {
+        obstacles: roomObstacles[roomName],
+        portals: roomPortals[roomName],
+        timeLeft: ROUND_DURATION,
+    });
+
+    // Timer compte à rebours (envoi chaque seconde)
+    let timeLeft = ROUND_DURATION;
+    if (roundTimers[roomName]) clearInterval(roundTimers[roomName]);
+    roundTimers[roomName] = setInterval(async () => {
+        timeLeft -= 1000;
+        io.to(roomName).emit("roundTimer", Math.max(0, timeLeft));
+        if (timeLeft <= 0) {
+            clearInterval(roundTimers[roomName]);
+            // Scores de la manche
+            const scores = Object.values(room.players)
+                .sort((a, b) => (b.roundTags || 0) - (a.roundTags || 0))
+                .slice(0, 3)
+                .map((p) => ({ pseudo: p.pseudo, tags: p.roundTags || 0 }));
+            io.to(roomName).emit("roundEnd", { scores });
+            // Récompense coins au gagnant de la manche
+
+            if (scores.length > 0 && scores[0].tags > 0) {
+                await grantCoins(scores[0].pseudo, COIN_REWARDS.roundWin);
+                await grantXP(scores[0].pseudo, 100);
+            }
+
+            // Reset scores manche
+            Object.values(room.players).forEach((p) => {
+                p.roundTags = 0;
+            });
+            // Nouvelle manche après 5s
+            setTimeout(() => startRound(roomName), 5000);
+        }
+    }, 1000);
+}
+
+// --- CHAT ---
+const chatHistory = {}; // { roomName: [ {pseudo, msg, ts} ] }
+ROOM_CONFIG.rooms.forEach((name) => {
+    chatHistory[name] = [];
+});
+
+// --- STREAKS ---
+const tagStreaks = {}; // { pseudo: count }
+
+// Helper : trouver la room d'un socket
+function getRoomOfSocket(socketId) {
+    for (const rName in rooms) {
+        if (rooms[rName].players[socketId]) return rName;
+    }
+    return null;
+}
+
+// Helper : spawn power-up aléatoire dans une room
+function spawnPowerup(roomName) {
+    const room = rooms[roomName];
+    if (!room || Object.keys(room.players).length < 2) return;
+    if (activePowerups[roomName].length >= 3) return;
+    const type =
+        POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+    const pu = {
+        uid: Date.now() + Math.random(),
+        type: type.id,
+        label: type.label,
+        color: type.color,
+        duration: type.duration,
+        x: Math.floor(Math.random() * 1100) + 50,
+        y: Math.floor(Math.random() * 550) + 50,
+    };
+    activePowerups[roomName].push(pu);
+    io.to(roomName).emit("spawnPowerup", pu);
+}
+
+// Helper : gain XP
+async function grantXP(pseudo, amount) {
+    if (!pseudo || pseudo === "Invité" || pseudo.startsWith("Cube")) return;
+    try {
+        const user = await User.findOne({ pseudo });
+        if (!user) return;
+        user.xp = (user.xp || 0) + amount;
+        const newLevel = Math.floor(Math.sqrt(user.xp / 100)) + 1;
+        const oldLevel = user.level || 1;
+        user.level = newLevel;
+        await user.save();
+        const socket = [...io.sockets.sockets.values()].find(
+            (s) => s.user && s.user.pseudo === pseudo,
+        );
+        if (socket) {
+            socket.emit("xpUpdate", { xp: user.xp, level: user.level });
+            if (newLevel > oldLevel)
+                socket.emit("serverMessage", {
+                    text: `🎉 Niveau ${newLevel} atteint !`,
+                    color: "#ffd700",
+                });
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function grantCoins(pseudo, amount) {
+    if (!pseudo || pseudo === "Invité" || pseudo.startsWith("Cube")) return;
+    try {
+        const user = await User.findOne({ pseudo });
+        if (!user) return;
+        user.coins = (user.coins || 0) + amount;
+        await user.save();
+        const socket = [...io.sockets.sockets.values()].find(
+            (s) => s.user && s.user.pseudo === pseudo,
+        );
+        if (socket) socket.emit("coinsUpdate", user.coins);
+    } catch (e) {
+        console.error(e);
+    }
+}
 
 // VARIABLES ADMIN
 let maintenanceMode = false;
 // Suppression de la variable godModeAdmins
 
-const API_USER = process.env.SIGHTENGINE_USER; 
+const API_USER = process.env.SIGHTENGINE_USER;
 const API_SECRET = process.env.SIGHTENGINE_SECRET;
-const API_URL = 'https://api.sightengine.com/1.0/check.json';
+const API_URL = "https://api.sightengine.com/1.0/check.json";
 const BLOCKED_IMG = "https://i.redd.it/58qnz74nf5j41.png";
 const COOLDOWN_NORMAL = 15000;
 const COOLDOWN_PENALTY = 60000;
 let lastTagTime = 0;
-const TAG_COOLDOWN = 1000; 
+const TAG_COOLDOWN = 1000;
 let lastWolfMoveTime = Date.now();
 
 // --- HELPERS ---
 async function addLog(action, admin, target, details) {
-    try { await Log.create({ action, admin, target, details }); } catch(e) { console.error(e); }
+    try {
+        await Log.create({ action, admin, target, details });
+    } catch (e) {
+        console.error(e);
+    }
 }
 
 async function checkAchievements(user, socketId) {
@@ -122,7 +338,10 @@ async function checkAchievements(user, socketId) {
         if (!user.achievements.includes(ach.id)) {
             if (ach.condition(user)) {
                 user.achievements.push(ach.id);
-                if (ach.rewardSkin && !user.unlockedSkins.includes(ach.rewardSkin)) {
+                if (
+                    ach.rewardSkin &&
+                    !user.unlockedSkins.includes(ach.rewardSkin)
+                ) {
                     user.unlockedSkins.push(ach.rewardSkin);
                 }
                 newUnlocks.push(ach);
@@ -133,29 +352,41 @@ async function checkAchievements(user, socketId) {
     if (changed) {
         await user.save();
         if (socketId) {
-            newUnlocks.forEach(ach => {
-                io.to(socketId).emit('achievementUnlocked', { name: ach.name, desc: ach.desc });
+            newUnlocks.forEach((ach) => {
+                io.to(socketId).emit("achievementUnlocked", {
+                    name: ach.name,
+                    desc: ach.desc,
+                });
             });
-            io.to(socketId).emit('updateSkins', user.unlockedSkins);
+            io.to(socketId).emit("updateSkins", user.unlockedSkins);
         }
     }
 }
 
 // MIDDLEWARES
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { success: false, message: "Trop de tentatives." } });
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { success: false, message: "Trop de tentatives." },
+});
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
-app.use(express.json({ limit: '10kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/api/', apiLimiter); 
+app.use(express.json({ limit: "10kb" }));
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/api/", apiLimiter);
 
 function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
     if (!token) return res.sendStatus(401);
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) return res.sendStatus(403);
@@ -165,311 +396,531 @@ function authenticateToken(req, res, next) {
 }
 
 const verifyAdmin = async (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
     if (!token) return res.sendStatus(401);
 
     jwt.verify(token, JWT_SECRET, async (err, decoded) => {
         if (err) return res.sendStatus(403);
         try {
             const user = await User.findById(decoded.id);
-            if (!user || !user.isAdmin) return res.status(403).json({ success: false, message: "Accès refusé." });
+            if (!user || !user.isAdmin)
+                return res
+                    .status(403)
+                    .json({ success: false, message: "Accès refusé." });
             req.user = user;
             next();
-        } catch (e) { res.sendStatus(500); }
+        } catch (e) {
+            res.sendStatus(500);
+        }
     });
 };
 
 // --- ROUTES AUTH ---
 
-app.post('/api/register', authLimiter, async (req, res) => {
+app.post("/api/register", authLimiter, async (req, res) => {
     const { pseudo, password } = req.body;
-    
+
     // Vérif IP
     const ip = req.ip;
     const banned = await BannedIP.findOne({ ip });
     if (banned) return res.json({ success: false, message: "IP Bannie." });
 
-    if (!pseudo || !password) return res.json({ success: false, message: "Champs manquants." });
-    if (pseudo.length > 12) return res.json({ success: false, message: "Pseudo trop long." });
-    
-    const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, 'i');
+    if (!pseudo || !password)
+        return res.json({ success: false, message: "Champs manquants." });
+    if (pseudo.length > 12)
+        return res.json({ success: false, message: "Pseudo trop long." });
+
+    const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, "i");
 
     try {
-        const existingUser = await User.findOne({ pseudo: { $regex: safePseudoRegex } });
-        if (existingUser) return res.json({ success: false, message: "Pseudo pris." });
+        const existingUser = await User.findOne({
+            pseudo: { $regex: safePseudoRegex },
+        });
+        if (existingUser)
+            return res.json({ success: false, message: "Pseudo pris." });
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = new User({ pseudo, password: hashedPassword });
         await newUser.save();
         res.json({ success: true });
-    } catch (error) { res.json({ success: false, message: "Erreur serveur." }); }
+    } catch (error) {
+        res.json({ success: false, message: "Erreur serveur." });
+    }
 });
 
-app.post('/api/login', authLimiter, async (req, res) => {
+app.post("/api/login", authLimiter, async (req, res) => {
     const { pseudo, password } = req.body;
-    
+
     const ip = req.ip;
     const banned = await BannedIP.findOne({ ip });
     if (banned) return res.json({ success: false, message: "IP Bannie." });
-    
+
     if (maintenanceMode) {
         const u = await User.findOne({ pseudo });
-        if (u && !u.isAdmin) return res.json({ success: false, message: "Maintenance en cours." });
+        if (u && !u.isAdmin)
+            return res.json({
+                success: false,
+                message: "Maintenance en cours.",
+            });
     }
 
-    if (!pseudo || !password) return res.json({ success: false, message: "Champs manquants." });
-    const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, 'i');
+    if (!pseudo || !password)
+        return res.json({ success: false, message: "Champs manquants." });
+    const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, "i");
 
     try {
-        const user = await User.findOne({ pseudo: { $regex: safePseudoRegex } });
-        if (!user) return res.json({ success: false, message: "Utilisateur inconnu." });
-        
-        if (user.isBanned) return res.json({ success: false, message: "Ce compte est banni." });
+        const user = await User.findOne({
+            pseudo: { $regex: safePseudoRegex },
+        });
+        if (!user)
+            return res.json({
+                success: false,
+                message: "Utilisateur inconnu.",
+            });
+
+        if (user.isBanned)
+            return res.json({
+                success: false,
+                message: "Ce compte est banni.",
+            });
 
         const match = await bcrypt.compare(password, user.password);
         if (match) {
-            const token = jwt.sign({ id: user._id, pseudo: user.pseudo }, JWT_SECRET, { expiresIn: '7d' });
-            res.json({ success: true, token: token, pseudo: user.pseudo, isAdmin: user.isAdmin });
-        }
-        else res.json({ success: false, message: "Mot de passe incorrect." });
-    } catch (error) { res.json({ success: false, message: "Erreur serveur." }); }
+            const token = jwt.sign(
+                { id: user._id, pseudo: user.pseudo },
+                JWT_SECRET,
+                { expiresIn: "7d" },
+            );
+            res.json({
+                success: true,
+                token: token,
+                pseudo: user.pseudo,
+                isAdmin: user.isAdmin,
+            });
+        } else res.json({ success: false, message: "Mot de passe incorrect." });
+    } catch (error) {
+        res.json({ success: false, message: "Erreur serveur." });
+    }
 });
 
-app.get('/api/me', authenticateToken, async (req, res) => {
+app.get("/api/me", authenticateToken, async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select('-password -__v');
+        const user = await User.findById(req.user.id).select("-password -__v");
         if (!user) return res.sendStatus(404);
         res.json({ success: true, pseudo: user.pseudo, stats: user });
-    } catch (e) { res.sendStatus(500); }
+    } catch (e) {
+        res.sendStatus(500);
+    }
 });
 
 // --- ROUTES STATS PUBLIQUES ---
-app.get('/api/stats/:pseudo', async (req, res) => {
+app.get("/api/stats/:pseudo", async (req, res) => {
     try {
-        const user = await User.findOne({ pseudo: req.params.pseudo }).select('-password -__v -_id');
+        const user = await User.findOne({ pseudo: req.params.pseudo }).select(
+            "-password -__v -_id",
+        );
         if (!user) return res.json({ success: false });
-        const ratio = user.timesTagged === 0 ? user.tagsInflicted : (user.tagsInflicted / user.timesTagged).toFixed(2);
+        const ratio =
+            user.timesTagged === 0
+                ? user.tagsInflicted
+                : (user.tagsInflicted / user.timesTagged).toFixed(2);
         const statsObj = user.toObject();
         statsObj.ratio = ratio;
         statsObj.distanceTraveled = Math.round(statsObj.distanceTraveled || 0);
         res.json({ success: true, stats: statsObj });
-    } catch (e) { res.json({ success: false }); }
+    } catch (e) {
+        res.json({ success: false });
+    }
 });
 
-app.get('/api/leaderboard', async (req, res) => {
+app.get("/api/leaderboard", async (req, res) => {
     try {
-        const hunters = await User.find().sort({ tagsInflicted: -1 }).limit(10).select('pseudo tagsInflicted');
-        const travelers = await User.find().sort({ distanceTraveled: -1 }).limit(10).select('pseudo distanceTraveled');
+        const hunters = await User.find()
+            .sort({ tagsInflicted: -1 })
+            .limit(10)
+            .select("pseudo tagsInflicted");
+        const travelers = await User.find()
+            .sort({ distanceTraveled: -1 })
+            .limit(10)
+            .select("pseudo distanceTraveled");
         res.json({ success: true, hunters, travelers });
-    } catch (e) { res.json({ success: false }); }
+    } catch (e) {
+        res.json({ success: false });
+    }
 });
 
-app.get('/api/my-achievements/:pseudo', async (req, res) => {
+app.get("/api/my-achievements/:pseudo", async (req, res) => {
     try {
-        const user = await User.findOne({ pseudo: req.params.pseudo }).select('achievements unlockedSkins');
+        const user = await User.findOne({ pseudo: req.params.pseudo }).select(
+            "achievements unlockedSkins",
+        );
         if (!user) return res.json({ success: false });
-        
-        const list = ACHIEVEMENTS.map(ach => ({
-            id: ach.id, name: ach.name, desc: ach.desc,
-            unlocked: user.achievements.includes(ach.id), rewardSkin: ach.rewardSkin
+
+        const list = ACHIEVEMENTS.map((ach) => ({
+            id: ach.id,
+            name: ach.name,
+            desc: ach.desc,
+            unlocked: user.achievements.includes(ach.id),
+            rewardSkin: ach.rewardSkin,
         }));
-        
-        res.json({ success: true, achievements: list, unlockedSkins: user.unlockedSkins, skinMap: ALL_SKIN_NAMES });
-    } catch (e) { res.json({ success: false }); }
+
+        res.json({
+            success: true,
+            achievements: list,
+            unlockedSkins: user.unlockedSkins,
+            skinMap: ALL_SKIN_NAMES,
+        });
+    } catch (e) {
+        res.json({ success: false });
+    }
 });
 
 // --- ROUTES ADMIN ---
 
 // 1. Dashboard
-app.get('/api/admin/dashboard', verifyAdmin, async (req, res) => {
+app.get("/api/admin/dashboard", verifyAdmin, async (req, res) => {
     try {
         const totalUsers = await User.countDocuments();
         const onlineCount = Object.keys(players).length;
         const history = await ConnStat.find().sort({ timestamp: -1 }).limit(24);
         const logs = await Log.find().sort({ timestamp: -1 }).limit(50);
-        
-        res.json({ 
-            success: true, 
-            totalUsers, 
-            onlineCount, 
-            history: history.reverse(), 
-            logs, 
-            maintenance: maintenanceMode 
+
+        res.json({
+            success: true,
+            totalUsers,
+            onlineCount,
+            history: history.reverse(),
+            logs,
+            maintenance: maintenanceMode,
         });
-    } catch(e) { res.status(500).json({ success: false }); }
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
 });
 
 // 2. Liste Users
-app.get('/api/admin/users', verifyAdmin, async (req, res) => {
+app.get("/api/admin/users", verifyAdmin, async (req, res) => {
     try {
-        const users = await User.find().select('-password');
+        const users = await User.find().select("-password");
         res.json({ success: true, users });
-    } catch (e) { res.status(500).json({ success: false }); }
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
 });
 
 // 3. Modifier User (Stats, Skins, Ban, Mdp)
-app.post('/api/admin/update-user', verifyAdmin, async (req, res) => {
+app.post("/api/admin/update-user", verifyAdmin, async (req, res) => {
     const { userId, updates } = req.body;
     try {
         const target = await User.findById(userId);
-        if(!target) return res.json({ success: false });
-        if(target.isAdmin && updates.isBanned) return res.json({ success: false, message: "Impossible de bannir un admin." });
+        if (!target) return res.json({ success: false });
+        if (target.isAdmin && updates.isBanned)
+            return res.json({
+                success: false,
+                message: "Impossible de bannir un admin.",
+            });
 
         if (updates.newPassword && updates.newPassword.trim() !== "") {
             updates.password = await bcrypt.hash(updates.newPassword, 10);
             delete updates.newPassword;
-        } else { delete updates.newPassword; }
+        } else {
+            delete updates.newPassword;
+        }
 
         await User.findByIdAndUpdate(userId, { $set: updates });
-        await addLog('UPDATE', req.user.pseudo, target.pseudo, `Modifs: ${Object.keys(updates).join(',')}`);
-        
+        await addLog(
+            "UPDATE",
+            req.user.pseudo,
+            target.pseudo,
+            `Modifs: ${Object.keys(updates).join(",")}`,
+        );
+
         if (updates.isBanned) {
-             const sockets = await io.fetchSockets();
-             for (const s of sockets) {
-                 if (s.user && s.user.pseudo === target.pseudo) {
-                     s.emit('forceLobby', 'banned'); s.disconnect(true);
-                 }
-             }
+            const sockets = await io.fetchSockets();
+            for (const s of sockets) {
+                if (s.user && s.user.pseudo === target.pseudo) {
+                    s.emit("forceLobby", "banned");
+                    s.disconnect(true);
+                }
+            }
         }
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ success: false }); }
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
 });
 
 // 4. Supprimer User
-app.delete('/api/admin/user/:id', verifyAdmin, async (req, res) => {
+app.delete("/api/admin/user/:id", verifyAdmin, async (req, res) => {
     try {
         const target = await User.findById(req.params.id);
-        if(target && target.isAdmin) return res.json({ success: false, message: "Admin protégé." });
+        if (target && target.isAdmin)
+            return res.json({ success: false, message: "Admin protégé." });
         await User.findByIdAndDelete(req.params.id);
-        await addLog('DELETE', req.user.pseudo, target ? target.pseudo : '?', "Compte supprimé");
+        await addLog(
+            "DELETE",
+            req.user.pseudo,
+            target ? target.pseudo : "?",
+            "Compte supprimé",
+        );
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ success: false }); }
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
 });
 
 // 5. Actions Serveur
-app.post('/api/admin/action', verifyAdmin, async (req, res) => {
+app.post("/api/admin/action", verifyAdmin, async (req, res) => {
     const { type, payload } = req.body;
     try {
-        if (type === 'MAINTENANCE') {
+        if (type === "MAINTENANCE") {
             maintenanceMode = !maintenanceMode;
-            io.emit('serverMessage', { text: maintenanceMode ? "🔒 Serveur en MAINTENANCE" : "🟢 Serveur OUVERT", color: 'orange' });
+            io.emit("serverMessage", {
+                text: maintenanceMode
+                    ? "🔒 Serveur en MAINTENANCE"
+                    : "🟢 Serveur OUVERT",
+                color: "orange",
+            });
             if (maintenanceMode) {
                 const sockets = await io.fetchSockets();
                 for (const s of sockets) {
                     let isAdmin = false;
-                    if(s.user) {
-                         const u = await User.findById(s.user.id);
-                         if(u && u.isAdmin) isAdmin = true;
+                    if (s.user) {
+                        const u = await User.findById(s.user.id);
+                        if (u && u.isAdmin) isAdmin = true;
                     }
-                    if(!isAdmin) { s.emit('forceLobby', 'maintenance'); s.disconnect(true); }
+                    if (!isAdmin) {
+                        s.emit("forceLobby", "maintenance");
+                        s.disconnect(true);
+                    }
                 }
             }
-            await addLog('MAINTENANCE', req.user.pseudo, 'SERVEUR', `État: ${maintenanceMode}`);
-        }
-        else if (type === 'BROADCAST') {
-            io.emit('serverMessage', { text: `📢 ADMIN : ${payload.message}`, color: 'red' });
-            await addLog('BROADCAST', req.user.pseudo, 'ALL', payload.message);
-        }
-        else if (type === 'WHISPER') {
+            await addLog(
+                "MAINTENANCE",
+                req.user.pseudo,
+                "SERVEUR",
+                `État: ${maintenanceMode}`,
+            );
+        } else if (type === "BROADCAST") {
+            io.emit("serverMessage", {
+                text: `📢 ADMIN : ${payload.message}`,
+                color: "red",
+            });
+            await addLog("BROADCAST", req.user.pseudo, "ALL", payload.message);
+        } else if (type === "WHISPER") {
             const sockets = await io.fetchSockets();
             let found = false;
             for (const s of sockets) {
                 if (s.user && s.user.pseudo === payload.targetPseudo) {
-                    s.emit('serverMessage', { text: `💬 MP Admin : ${payload.message}`, color: 'purple' });
+                    s.emit("serverMessage", {
+                        text: `💬 MP Admin : ${payload.message}`,
+                        color: "purple",
+                    });
                     found = true;
                 }
             }
-            if(!found) return res.json({success:false, message:"Joueur introuvable."});
-            await addLog('WHISPER', req.user.pseudo, payload.targetPseudo, payload.message);
-        }
-        else if (type === 'KICK') {
+            if (!found)
+                return res.json({
+                    success: false,
+                    message: "Joueur introuvable.",
+                });
+            await addLog(
+                "WHISPER",
+                req.user.pseudo,
+                payload.targetPseudo,
+                payload.message,
+            );
+        } else if (type === "KICK") {
             const sockets = await io.fetchSockets();
             for (const s of sockets) {
-                if ((s.user && s.user.pseudo === payload.targetPseudo) || (!s.user && payload.targetPseudo.startsWith("Cube") && players[s.id])) {
-                    s.emit('forceLobby', 'kick'); s.disconnect(true);
+                if (
+                    (s.user && s.user.pseudo === payload.targetPseudo) ||
+                    (!s.user &&
+                        payload.targetPseudo.startsWith("Cube") &&
+                        players[s.id])
+                ) {
+                    s.emit("forceLobby", "kick");
+                    s.disconnect(true);
                 }
             }
-            await addLog('KICK', req.user.pseudo, payload.targetPseudo, "Expulsé");
-        }
-        else if (type === 'BAN_IP') {
+            await addLog(
+                "KICK",
+                req.user.pseudo,
+                payload.targetPseudo,
+                "Expulsé",
+            );
+        } else if (type === "BAN_IP") {
             const sockets = await io.fetchSockets();
             let targetIp = null;
             for (const s of sockets) {
                 if (s.user && s.user.pseudo === payload.targetPseudo) {
                     targetIp = s.handshake.address;
-                    if(s.handshake.headers['x-forwarded-for']) targetIp = s.handshake.headers['x-forwarded-for'].split(',')[0];
-                    s.emit('forceLobby', 'banned'); s.disconnect(true);
+                    if (s.handshake.headers["x-forwarded-for"])
+                        targetIp =
+                            s.handshake.headers["x-forwarded-for"].split(
+                                ",",
+                            )[0];
+                    s.emit("forceLobby", "banned");
+                    s.disconnect(true);
                     break;
                 }
             }
             if (targetIp) {
-                await BannedIP.create({ ip: targetIp, reason: "Banni par admin" });
-                await addLog('BAN_IP', req.user.pseudo, payload.targetPseudo, `IP: ${targetIp}`);
-            } else return res.json({ success: false, message: "IP introuvable." });
+                await BannedIP.create({
+                    ip: targetIp,
+                    reason: "Banni par admin",
+                });
+                await addLog(
+                    "BAN_IP",
+                    req.user.pseudo,
+                    payload.targetPseudo,
+                    `IP: ${targetIp}`,
+                );
+            } else
+                return res.json({ success: false, message: "IP introuvable." });
         }
         res.json({ success: true });
-    } catch(e) { console.error(e); res.status(500).json({ success: false }); }
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false });
+    }
 });
 
-
-
 // --- GESTION IP BANNIES (NOUVEAU) ---
-app.get('/api/admin/banned-ips', verifyAdmin, async (req, res) => {
+app.get("/api/admin/banned-ips", verifyAdmin, async (req, res) => {
     try {
         const list = await BannedIP.find().sort({ date: -1 });
         res.json({ success: true, list });
-    } catch(e) { res.status(500).json({ success: false }); }
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
 });
 
-app.post('/api/admin/unban-ip', verifyAdmin, async (req, res) => {
+app.post("/api/admin/unban-ip", verifyAdmin, async (req, res) => {
     try {
         const { id } = req.body;
         await BannedIP.findByIdAndDelete(id);
-        await addLog('UNBAN_IP', req.user.pseudo, 'IP', 'IP débannie');
+        await addLog("UNBAN_IP", req.user.pseudo, "IP", "IP débannie");
         res.json({ success: true });
-    } catch(e) { res.status(500).json({ success: false }); }
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// BOUTIQUE : Liste des skins
+app.get("/api/shop", (req, res) => {
+    res.json({ success: true, skins: SHOP_SKINS });
+});
+
+// BOUTIQUE : Acheter un skin
+app.post("/api/shop/buy", authenticateToken, async (req, res) => {
+    const { skinId } = req.body;
+    const skin = SHOP_SKINS.find((s) => s.id === skinId);
+    if (!skin)
+        return res.json({ success: false, message: "Skin introuvable." });
+
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user)
+            return res.json({
+                success: false,
+                message: "Utilisateur introuvable.",
+            });
+        if (user.unlockedSkins.includes(skin.value))
+            return res.json({ success: false, message: "Skin déjà possédé !" });
+        if ((user.coins || 0) < skin.price)
+            return res.json({
+                success: false,
+                message: `Pas assez de coins ! (${skin.price - user.coins} manquants)`,
+            });
+
+        user.coins -= skin.price;
+        user.unlockedSkins.push(skin.value);
+        // Stocker le nom du skin
+        if (!ALL_SKIN_NAMES[skin.value]) ALL_SKIN_NAMES[skin.value] = skin.name;
+        await user.save();
+
+        res.json({
+            success: true,
+            newCoins: user.coins,
+            skinValue: skin.value,
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Erreur serveur." });
+    }
+});
+
+// COINS : Solde actuel
+app.get("/api/coins", authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select("coins");
+        res.json({ success: true, coins: user ? user.coins || 0 : 0 });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
 });
 
 // --- SOCKET.IO ---
 async function removePlayerFromGame(socketId) {
-    if (players[socketId]) {
-        const p = players[socketId];
-        if (p.pendingDistance > 0 && p.pseudo !== "Invité" && !p.pseudo.startsWith("Cube")) {
-            try {
-                const user = await User.findOne({ pseudo: p.pseudo });
-                if(user) {
-                    user.distanceTraveled = (user.distanceTraveled || 0) + Math.round(p.pendingDistance);
-                    await checkAchievements(user, null);
-                    await user.save();
-                }
-            } catch(e) { console.error(e); }
-        }
-        delete players[socketId];
-        // Suppression du nettoyage godMode
-        io.emit('playerDisconnected', socketId); 
-        if (socketId === wolfId) {
-            const ids = Object.keys(players);
-            if (ids.length > 0) {
-                wolfId = ids[Math.floor(Math.random() * ids.length)];
-                io.emit('updateWolf', wolfId);
-                lastWolfMoveTime = Date.now();
-            } else {
-                wolfId = null; io.emit('updateWolf', null);
+    const roomName = getRoomOfSocket(socketId);
+    if (!roomName) return;
+    const room = rooms[roomName];
+    const p = room.players[socketId];
+    if (!p) return;
+
+    if (
+        p.pendingDistance > 0 &&
+        p.pseudo !== "Invité" &&
+        !p.pseudo.startsWith("Cube")
+    ) {
+        try {
+            const user = await User.findOne({ pseudo: p.pseudo });
+            if (user) {
+                user.distanceTraveled =
+                    (user.distanceTraveled || 0) +
+                    Math.round(p.pendingDistance);
+                const xpGain =
+                    Math.floor(p.pendingDistance / 100) *
+                    XP_CONFIG.distancePer100;
+                user.xp = (user.xp || 0) + xpGain;
+                user.level = Math.floor(Math.sqrt(user.xp / 100)) + 1;
+                await checkAchievements(user, null);
+                await user.save();
             }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    delete room.players[socketId];
+    io.to(roomName).emit("playerDisconnected", socketId);
+
+    if (socketId === room.wolfId) {
+        const ids = Object.keys(room.players);
+        if (ids.length > 0) {
+            room.wolfId = ids[Math.floor(Math.random() * ids.length)];
+            room.players[room.wolfId].isWolf = true;
+            io.to(roomName).emit("updateWolf", room.wolfId);
+            room.lastWolfMoveTime = Date.now();
+        } else {
+            room.wolfId = null;
+            io.to(roomName).emit("updateWolf", null);
         }
     }
 }
 
 io.use(async (socket, next) => {
     let ip = socket.handshake.address;
-    if(socket.handshake.headers['x-forwarded-for']) ip = socket.handshake.headers['x-forwarded-for'].split(',')[0];
+    if (socket.handshake.headers["x-forwarded-for"])
+        ip = socket.handshake.headers["x-forwarded-for"].split(",")[0];
     const banned = await BannedIP.findOne({ ip });
-    if(banned) return next(new Error("IP Bannie"));
+    if (banned) return next(new Error("IP Bannie"));
 
     const token = socket.handshake.auth.token;
     if (token) {
         jwt.verify(token, JWT_SECRET, (err, decoded) => {
-            if (err) socket.user = null; else socket.user = decoded;
+            if (err) socket.user = null;
+            else socket.user = decoded;
             next();
         });
     } else {
@@ -478,144 +929,449 @@ io.use(async (socket, next) => {
     }
 });
 
-io.on('connection', async (socket) => {
+io.on("connection", async (socket) => {
     if (maintenanceMode) {
         let isAdmin = false;
-        if(socket.user) {
-             const u = await User.findById(socket.user.id);
-             if(u && u.isAdmin) isAdmin = true;
+        if (socket.user) {
+            const u = await User.findById(socket.user.id);
+            if (u && u.isAdmin) isAdmin = true;
         }
-        if (!isAdmin) { socket.emit('forceLobby', 'maintenance'); socket.disconnect(); return; }
+        if (!isAdmin) {
+            socket.emit("forceLobby", "maintenance");
+            socket.disconnect();
+            return;
+        }
     }
 
-    socket.emit('currentPlayers', players);
-    socket.emit('updateWolf', wolfId);
-    if (currentBackground) socket.emit('updateBackground', currentBackground);
+    socket.emit("currentPlayers", players);
+    socket.emit("updateWolf", wolfId);
+    if (currentBackground) socket.emit("updateBackground", currentBackground);
 
-    socket.on('joinGame', async () => {
-        if(players[socket.id]) return;
+    socket.on("joinRoom", async (roomName) => {
+        if (!ROOM_CONFIG.rooms.includes(roomName)) return;
+        const room = rooms[roomName];
+        if (Object.keys(room.players).length >= ROOM_CONFIG.maxPlayersPerRoom) {
+            socket.emit("roomFull");
+            return;
+        }
+        if (getRoomOfSocket(socket.id)) return;
+
         let finalPseudo = "Invité";
-        let userColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+        let userColor =
+            "#" +
+            Math.floor(Math.random() * 16777215)
+                .toString(16)
+                .padStart(6, "0");
         if (socket.user && socket.user.pseudo) {
             finalPseudo = socket.user.pseudo;
             try {
                 const user = await User.findOne({ pseudo: finalPseudo });
                 if (user) {
-                    if (user.isBanned) { socket.emit('forceLobby', 'banned'); socket.disconnect(); return; }
-                    await User.updateOne({ pseudo: finalPseudo }, { $inc: { gamesJoined: 1 } });
-                    if (user.currentSkin) userColor = user.currentSkin; 
+                    if (user.isBanned) {
+                        socket.emit("forceLobby", "banned");
+                        socket.disconnect();
+                        return;
+                    }
+                    await User.updateOne(
+                        { pseudo: finalPseudo },
+                        { $inc: { gamesJoined: 1 } },
+                    );
+                    if (user.currentSkin) userColor = user.currentSkin;
                 }
-            } catch (err) { }
-        } else { finalPseudo = "Cube" + Math.floor(Math.random() * 1000); }
-        players[socket.id] = { x: Math.floor(Math.random() * 500) + 50, y: Math.floor(Math.random() * 400) + 50, color: userColor, pseudo: finalPseudo, pendingDistance: 0 };
-        if (!wolfId) { wolfId = socket.id; lastWolfMoveTime = Date.now(); io.emit('updateWolf', wolfId); }
-        socket.emit('gameJoined', { id: socket.id, info: players[socket.id] });
-        socket.broadcast.emit('newPlayer', { playerId: socket.id, playerInfo: players[socket.id] });
+            } catch (err) {}
+        } else {
+            finalPseudo = "Cube" + Math.floor(Math.random() * 1000);
+        }
+
+        socket.join(roomName);
+        socket.currentRoom = roomName;
+
+        room.players[socket.id] = {
+            x: Math.floor(Math.random() * 900) + 50,
+            y: Math.floor(Math.random() * 450) + 50,
+            color: userColor,
+            pseudo: finalPseudo,
+            pendingDistance: 0,
+            shield: false,
+            speed: 1,
+            invisible: false,
+            isWolf: false,
+        };
+
+        if (!room.wolfId) {
+            room.wolfId = socket.id;
+            room.players[socket.id].isWolf = true;
+            room.lastWolfMoveTime = Date.now();
+            io.to(roomName).emit("updateWolf", room.wolfId);
+        }
+
+        socket.emit("gameJoined", {
+            id: socket.id,
+            info: room.players[socket.id],
+            room: roomName,
+        });
+        socket.emit("currentPlayers", room.players);
+        socket.emit("updateWolf", room.wolfId);
+        socket.emit("powerupsInit", activePowerups[roomName]);
+        socket.emit("portalsInit", roomPortals[roomName]);
+        if (room.background) socket.emit("updateBackground", room.background);
+        socket.emit("chatHistory", chatHistory[roomName].slice(-30));
+        socket.emit("infectionMode", infectionMode[roomName]);
+
+        socket.to(roomName).emit("newPlayer", {
+            playerId: socket.id,
+            playerInfo: room.players[socket.id],
+        });
+
+        // Envoyer obstacles actuels + timer
+        socket.emit("obstaclesInit", roomObstacles[roomName]);
+
+        // Démarrer la manche si c'est le premier joueur
+        if (Object.keys(room.players).length === 1) {
+            setTimeout(() => startRound(roomName), 1000);
+        }
+
+        await grantXP(finalPseudo, XP_CONFIG.perGame);
+
+        await grantCoins(finalPseudo, COIN_REWARDS.perGame);
+        // Envoyer coins actuels au joueur
+        if (socket.user) {
+            const userCoins = await User.findOne({
+                pseudo: finalPseudo,
+            }).select("coins");
+            if (userCoins) socket.emit("coinsUpdate", userCoins.coins || 0);
+        }
     });
 
-    socket.on('leaveGame', async () => { await removePlayerFromGame(socket.id); });
-
+    socket.on("leaveGame", async () => {
+        await removePlayerFromGame(socket.id);
+    });
     // Suppression de socket.on('toggleGodMode')
 
-    socket.on('playerMovement', (movementData) => {
-        if (players[socket.id]) {
-            const p = players[socket.id];
-            const dx = movementData.x - p.x;
-            const dy = movementData.y - p.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (!p.pendingDistance) p.pendingDistance = 0;
-            p.pendingDistance += dist;
-            p.x = movementData.x; p.y = movementData.y;
-            if (socket.id === wolfId) lastWolfMoveTime = Date.now();
-            socket.broadcast.emit('playerMoved', { playerId: socket.id, x: p.x, y: p.y });
-        }
-    });
+    socket.on("playerMovement", (movementData) => {
+        const roomName = getRoomOfSocket(socket.id);
+        if (!roomName) return;
+        const room = rooms[roomName];
+        const p = room.players[socket.id];
+        if (!p) return;
+        const dx = movementData.x - p.x,
+            dy = movementData.y - p.y;
+        p.pendingDistance += Math.sqrt(dx * dx + dy * dy);
+        p.x = movementData.x;
+        p.y = movementData.y;
+        if (socket.id === room.wolfId) room.lastWolfMoveTime = Date.now();
+        socket.to(roomName).emit("playerMoved", {
+            playerId: socket.id,
+            x: p.x,
+            y: p.y,
+            invisible: p.invisible,
+        });
 
-    socket.on('tagPlayer', async (targetId) => {
-        if (socket.id === wolfId && players[targetId]) {
-            // Suppression de la vérification godModeAdmins
-            const now = Date.now();
-            const wolf = players[socket.id]; const target = players[targetId];
-            const dx = Math.abs(wolf.x - target.x); const dy = Math.abs(wolf.y - target.y);
-            if (dx < 90 && dy < 90) {
-                if (now - lastTagTime > TAG_COOLDOWN) {
-                    wolfId = targetId; lastTagTime = now; lastWolfMoveTime = Date.now(); 
-                    io.emit('updateWolf', wolfId); io.emit('playerTagged', { x: target.x + 25, y: target.y + 25, color: target.color });
-                    const wolfPseudo = wolf.pseudo; const targetPseudo = target.pseudo;
-                    if (wolfPseudo !== "Invité" && !wolfPseudo.startsWith("Cube")) {
-                        const uWolf = await User.findOne({ pseudo: wolfPseudo });
-                        if (uWolf) { uWolf.tagsInflicted++; await checkAchievements(uWolf, socket.id); await uWolf.save(); }
-                    }
-                    if (targetPseudo !== "Invité" && !targetPseudo.startsWith("Cube")) {
-                        const uTarget = await User.findOne({ pseudo: targetPseudo });
-                        if (uTarget) { uTarget.timesTagged++; await checkAchievements(uTarget, targetId); await uTarget.save(); }
-                    }
+// Vérif portails
+        const currentPortals = roomPortals[roomName] || [];
+        for (const portal of currentPortals) {
+            if (
+                Math.abs(p.x - portal.x) < 40 &&
+                Math.abs(p.y - portal.y) < 40
+            ) {
+                const dest = currentPortals.find(pp => pp.id === portal.pairId);
+                if (dest) {
+                    p.x = dest.x + 50;
+                    p.y = dest.y + 50;
+                    socket.emit("teleport", { x: p.x, y: p.y });
+                    io.to(roomName).emit("playerMoved", {
+                        playerId: socket.id,
+                        x: p.x,
+                        y: p.y,
+                    });
                 }
+            }
+        }
+
+        // Vérif power-ups
+        const pus = activePowerups[roomName];
+        for (let i = pus.length - 1; i >= 0; i--) {
+            const pu = pus[i];
+            if (Math.abs(p.x - pu.x) < 50 && Math.abs(p.y - pu.y) < 50) {
+                pus.splice(i, 1);
+                io.to(roomName).emit("collectPowerup", {
+                    uid: pu.uid,
+                    playerId: socket.id,
+                    type: pu.type,
+                    duration: pu.duration,
+                });
+                p[pu.type] = true;
+                if (pu.type === "speed") p.speedBoost = true;
+                setTimeout(() => {
+                    if (room.players[socket.id]) {
+                        room.players[socket.id][pu.type] = false;
+                        room.players[socket.id].speedBoost = false;
+                        socket.emit("powerupExpired", pu.type);
+                    }
+                }, pu.duration);
             }
         }
     });
 
-    socket.on('changeBackground', async (imageData) => {
+    socket.on("tagPlayer", async (targetId) => {
+        const roomName = getRoomOfSocket(socket.id);
+        if (!roomName) return;
+        const room = rooms[roomName];
+        const wolf = room.players[socket.id];
+        const target = room.players[targetId];
+        if (!wolf || !target) return;
+        if (target.shield) {
+            socket.emit("serverMessage", {
+                text: "🛡️ Bouclier !",
+                color: "#00aaff",
+            });
+            return;
+        }
+
+        const isWolfMode = !infectionMode[roomName];
+        const canTag = isWolfMode ? socket.id === room.wolfId : wolf.isWolf;
+        if (!canTag) return;
+
         const now = Date.now();
-        if (uploadCooldowns[socket.id] && now < uploadCooldowns[socket.id]) { socket.emit('uploadError', `Attends encore ${Math.ceil((uploadCooldowns[socket.id] - now) / 1000)}s.`); return; }
-        if (!API_USER || !API_SECRET) { socket.emit('uploadError', "Analyse d'image désactivée."); return; }
+        if (now - lastTagTime < TAG_COOLDOWN) return;
+        const dx = Math.abs(wolf.x - target.x),
+            dy = Math.abs(wolf.y - target.y);
+        if (dx >= 90 || dy >= 90) return;
+
+        lastTagTime = now;
+        io.to(roomName).emit("playerTagged", {
+            x: target.x + 25,
+            y: target.y + 25,
+            color: target.color,
+        });
+
+        if (wolf) wolf.roundTags = (wolf.roundTags || 0) + 1;
+
+        if (isWolfMode) {
+            room.wolfId = targetId;
+            wolf.isWolf = false;
+            target.isWolf = true;
+            io.to(roomName).emit("updateWolf", room.wolfId);
+            room.lastWolfMoveTime = Date.now();
+        } else {
+            // Mode infection
+            target.isWolf = true;
+            io.to(roomName).emit("infectedPlayer", targetId);
+        }
+
+        // Streak
+        const wolfPseudo = wolf.pseudo;
+        if (!tagStreaks[wolfPseudo]) tagStreaks[wolfPseudo] = 0;
+        tagStreaks[wolfPseudo]++;
+        const streak = tagStreaks[wolfPseudo];
+        if (streak >= 3)
+            io.to(roomName).emit("serverMessage", {
+                text: `🔥 ${wolfPseudo} est en feu ! (x${streak})`,
+                color: "#ff6600",
+            });
+
+        if (
+            target.pseudo &&
+            !target.pseudo.startsWith("Cube") &&
+            target.pseudo !== "Invité"
+        ) {
+            tagStreaks[target.pseudo] = 0;
+        }
+
+        // Stats BDD
+        const wolfP = wolf.pseudo;
+        const targetP = target.pseudo;
+        if (wolfP !== "Invité" && !wolfP.startsWith("Cube")) {
+            const uWolf = await User.findOne({ pseudo: wolfP });
+            if (uWolf) {
+                uWolf.tagsInflicted++;
+                await checkAchievements(uWolf, socket.id);
+                await uWolf.save();
+            }
+            await grantXP(wolfP, XP_CONFIG.tagInflicted);
+            await grantCoins(wolfP, COIN_REWARDS.tagInflicted);
+        }
+        if (targetP !== "Invité" && !targetP.startsWith("Cube")) {
+            const uTarget = await User.findOne({ pseudo: targetP });
+            if (uTarget) {
+                uTarget.timesTagged++;
+                await checkAchievements(uTarget, targetId);
+                await uTarget.save();
+            }
+            await grantXP(targetP, XP_CONFIG.tagReceived);
+        }
+    });
+
+    socket.on("changeBackground", async (imageData) => {
+        const now = Date.now();
+        if (uploadCooldowns[socket.id] && now < uploadCooldowns[socket.id]) {
+            socket.emit(
+                "uploadError",
+                `Attends encore ${Math.ceil((uploadCooldowns[socket.id] - now) / 1000)}s.`,
+            );
+            return;
+        }
+        if (!API_USER || !API_SECRET) {
+            socket.emit("uploadError", "Analyse d'image désactivée.");
+            return;
+        }
         try {
-            const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
-            let imageBuffer = Buffer.from(base64Data, 'base64');
-            const isGif = imageBuffer.toString('ascii', 0, 3) === 'GIF';
+            const base64Data = imageData.replace(
+                /^data:image\/\w+;base64,/,
+                "",
+            );
+            let imageBuffer = Buffer.from(base64Data, "base64");
+            const isGif = imageBuffer.toString("ascii", 0, 3) === "GIF";
             if (isGif) {
                 const metadata = await sharp(imageBuffer).metadata();
-                imageBuffer = await sharp(imageBuffer, { page: Math.floor(Math.random() * (metadata.pages||1)) }).png().toBuffer();
+                imageBuffer = await sharp(imageBuffer, {
+                    page: Math.floor(Math.random() * (metadata.pages || 1)),
+                })
+                    .png()
+                    .toBuffer();
             }
             const form = new FormData();
-            form.append('media', imageBuffer, 'image.jpg');
-            form.append('models', 'nudity'); form.append('api_user', API_USER); form.append('api_secret', API_SECRET);
-            const response = await axios.post(API_URL, form, { headers: form.getHeaders() });
-            if (response.data.status === 'success') {
-                if (response.data.nudity.raw > 0.5 || response.data.nudity.partial > 0.6) {
-                    uploadCooldowns[socket.id] = now + COOLDOWN_PENALTY; 
-                    currentBackground = BLOCKED_IMG; io.emit('updateBackground', BLOCKED_IMG); socket.emit('uploadError', "Image interdite ! Bloqué 1 min.");
+            form.append("media", imageBuffer, "image.jpg");
+            form.append("models", "nudity");
+            form.append("api_user", API_USER);
+            form.append("api_secret", API_SECRET);
+            const response = await axios.post(API_URL, form, {
+                headers: form.getHeaders(),
+            });
+            if (response.data.status === "success") {
+                if (
+                    response.data.nudity.raw > 0.5 ||
+                    response.data.nudity.partial > 0.6
+                ) {
+                    uploadCooldowns[socket.id] = now + COOLDOWN_PENALTY;
+                    const rn2 = getRoomOfSocket(socket.id);
+                    if (rn2) {
+                        rooms[rn2].background = BLOCKED_IMG;
+                        io.to(rn2).emit("updateBackground", BLOCKED_IMG);
+                    }
+                    socket.emit(
+                        "uploadError",
+                        "Image interdite ! Bloqué 1 min.",
+                    );
                 } else {
-                    uploadCooldowns[socket.id] = now + COOLDOWN_NORMAL; 
-                    currentBackground = imageData; io.emit('updateBackground', imageData);
+                    uploadCooldowns[socket.id] = now + COOLDOWN_NORMAL;
+                    const rn = getRoomOfSocket(socket.id);
+                    if (rn) {
+                        rooms[rn].background = imageData;
+                        io.to(rn).emit("updateBackground", imageData);
+                    }
                     if (socket.user && socket.user.pseudo) {
-                         const u = await User.findOne({ pseudo: socket.user.pseudo });
-                         if(u) { u.backgroundsChanged++; await checkAchievements(u, socket.id); await u.save(); }
+                        const u = await User.findOne({
+                            pseudo: socket.user.pseudo,
+                        });
+                        if (u) {
+                            u.backgroundsChanged++;
+                            await checkAchievements(u, socket.id);
+                            await u.save();
+                        }
                     }
                 }
             }
-        } catch (error) { socket.emit('uploadError', "Erreur analyse image."); }
+        } catch (error) {
+            socket.emit("uploadError", "Erreur analyse image.");
+        }
     });
 
-    socket.on('saveSkin', async (data) => { if (socket.user && socket.user.pseudo && data.color) await User.updateOne({ pseudo: socket.user.pseudo }, { $set: { currentSkin: data.color } }); });
-    socket.on('redeemCode', async (data) => {
+    socket.on("saveSkin", async (data) => {
+        if (socket.user && socket.user.pseudo && data.color)
+            await User.updateOne(
+                { pseudo: socket.user.pseudo },
+                { $set: { currentSkin: data.color } },
+            );
+    });
+    socket.on("redeemCode", async (data) => {
         const { code } = data;
-        if (!socket.user || !socket.user.pseudo) { socket.emit('codeError', "Connecte-toi d'abord !"); return; }
-        const pseudo = socket.user.pseudo; const cleanCode = code.trim().toUpperCase();
+        if (!socket.user || !socket.user.pseudo) {
+            socket.emit("codeError", "Connecte-toi d'abord !");
+            return;
+        }
+        const pseudo = socket.user.pseudo;
+        const cleanCode = code.trim().toUpperCase();
         if (SECRET_CODES[cleanCode]) {
             const reward = SECRET_CODES[cleanCode];
             const user = await User.findOne({ pseudo });
             if (user) {
                 if (!user.redeemedCodes) user.redeemedCodes = [];
-                if (user.redeemedCodes.includes(cleanCode)) socket.emit('codeError', "Code déjà utilisé !");
+                if (user.redeemedCodes.includes(cleanCode))
+                    socket.emit("codeError", "Code déjà utilisé !");
                 else {
                     user.redeemedCodes.push(cleanCode);
                     if (!user.unlockedSkins.includes(reward.skin)) {
-                        user.unlockedSkins.push(reward.skin); await user.save();
-                        socket.emit('codeSuccess', `Skin débloqué : ${reward.name}`); socket.emit('updateSkins', user.unlockedSkins);
-                    } else { socket.emit('codeError', "Tu as déjà ce skin !"); await user.save(); }
+                        user.unlockedSkins.push(reward.skin);
+                        await user.save();
+                        socket.emit(
+                            "codeSuccess",
+                            `Skin débloqué : ${reward.name}`,
+                        );
+                        socket.emit("updateSkins", user.unlockedSkins);
+                    } else {
+                        socket.emit("codeError", "Tu as déjà ce skin !");
+                        await user.save();
+                    }
                 }
             }
-        } else socket.emit('codeError', "Code invalide.");
+        } else socket.emit("codeError", "Code invalide.");
     });
 
-    socket.on('disconnect', async () => { await removePlayerFromGame(socket.id); delete uploadCooldowns[socket.id]; });
+    // CHAT
+    socket.on("chatMessage", (msg) => {
+        const roomName = getRoomOfSocket(socket.id);
+        if (!roomName) return;
+        const p = rooms[roomName].players[socket.id];
+        if (!p) return;
+        const clean = String(msg).trim().slice(0, 100);
+        if (!clean) return;
+        const entry = { pseudo: p.pseudo, msg: clean, ts: Date.now() };
+        chatHistory[roomName].push(entry);
+        if (chatHistory[roomName].length > 100) chatHistory[roomName].shift();
+        io.to(roomName).emit("chatMessage", entry);
+    });
+
+    // TOGGLE INFECTION MODE (admin)
+    socket.on("toggleInfection", async () => {
+        if (!socket.user) return;
+        const user = await User.findById(socket.user.id);
+        if (!user || !user.isAdmin) return;
+        const roomName = getRoomOfSocket(socket.id);
+        if (!roomName) return;
+        infectionMode[roomName] = !infectionMode[roomName];
+        io.to(roomName).emit("infectionMode", infectionMode[roomName]);
+        io.to(roomName).emit("serverMessage", {
+            text: infectionMode[roomName]
+                ? "🧟 MODE INFECTION ACTIVÉ !"
+                : "🐺 Mode normal rétabli",
+            color: infectionMode[roomName] ? "#aa0000" : "#00aa00",
+        });
+    });
+
+    socket.on("disconnect", async () => {
+        await removePlayerFromGame(socket.id);
+        delete uploadCooldowns[socket.id];
+    });
 });
 
 setInterval(() => {
-    const ids = Object.keys(players);
-    if (wolfId && ids.length > 1 && Date.now() - lastWolfMoveTime > 15000) { 
-        io.to(wolfId).emit('forceLobby', 'afk'); removePlayerFromGame(wolfId);
+    for (const roomName in rooms) {
+        const room = rooms[roomName];
+        const ids = Object.keys(room.players);
+        if (
+            room.wolfId &&
+            ids.length > 1 &&
+            Date.now() - room.lastWolfMoveTime > 15000
+        ) {
+            const ws = [...io.sockets.sockets.values()].find(
+                (s) => s.id === room.wolfId,
+            );
+            if (ws) ws.emit("forceLobby", "afk");
+            removePlayerFromGame(room.wolfId);
+        }
+        // Spawn power-up toutes les ~10s si conditions OK
+        if (Math.random() < 0.1) spawnPowerup(roomName);
     }
 }, 1000);
 
@@ -626,38 +1382,58 @@ const saveGraphStats = async () => {
         const last = await ConnStat.findOne().sort({ timestamp: -1 });
 
         // Protection anti-spam (moins de 55s)
-        if (last && (Date.now() - last.timestamp) < 55000) return;
+        if (last && Date.now() - last.timestamp < 55000) return;
 
         // Si le nombre de joueurs est identique au dernier enregistrement, on ignore
         if (last && last.count === count) return;
-        
+
         await ConnStat.create({ count });
-    } catch (e) { console.error("Erreur stats:", e); }
+    } catch (e) {
+        console.error("Erreur stats:", e);
+    }
 };
-saveGraphStats(); 
+saveGraphStats();
 setInterval(saveGraphStats, 60 * 1000);
 
 // Nettoyage automatique des stats > 24h (Toutes les heures)
-setInterval(async () => {
-    try {
-        const limitDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        await ConnStat.deleteMany({ timestamp: { $lt: limitDate } });
-    } catch (e) { console.error("Erreur nettoyage stats:", e); }
-}, 60 * 60 * 1000);
+setInterval(
+    async () => {
+        try {
+            const limitDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            await ConnStat.deleteMany({ timestamp: { $lt: limitDate } });
+        } catch (e) {
+            console.error("Erreur nettoyage stats:", e);
+        }
+    },
+    60 * 60 * 1000,
+);
 
 // Sauvegarde distances
-setInterval(async () => {
-    for (const id in players) {
-        const p = players[id];
-        if (p.pendingDistance > 0 && p.pseudo !== "Invité" && !p.pseudo.startsWith("Cube")) {
-            try {
-                const user = await User.findOne({ pseudo: p.pseudo });
-                if(user) { user.distanceTraveled += Math.round(p.pendingDistance); await checkAchievements(user, id); await user.save(); }
-                p.pendingDistance = 0;
-            } catch (err) {}
+setInterval(
+    async () => {
+        for (const id in players) {
+            const p = players[id];
+            if (
+                p.pendingDistance > 0 &&
+                p.pseudo !== "Invité" &&
+                !p.pseudo.startsWith("Cube")
+            ) {
+                try {
+                    const user = await User.findOne({ pseudo: p.pseudo });
+                    if (user) {
+                        user.distanceTraveled += Math.round(p.pendingDistance);
+                        await checkAchievements(user, id);
+                        await user.save();
+                    }
+                    p.pendingDistance = 0;
+                } catch (err) {}
+            }
         }
-    }
-}, 60 * 60 * 1000);
+    },
+    60 * 60 * 1000,
+);
 
 const PORT = process.env.PORT || 2220;
-http.listen(PORT, '0.0.0.0', () => console.log(`Serveur lancé sur le port ${PORT}`));
+http.listen(PORT, "0.0.0.0", () =>
+    console.log(`Serveur lancé sur le port ${PORT}`),
+);

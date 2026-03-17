@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <title>Cube Game</title>
     <link rel="stylesheet" href="skins.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
     <style>
@@ -115,11 +117,252 @@
         .admin-tab-btn.active { background: white; border-bottom: 2px solid #e74c3c; color: #e74c3c; }
         .admin-content { display: none; padding: 10px; background: white; min-height: 200px; border-radius: 0 4px 4px 4px; }
         .admin-content.active { display: block; }
+
+        /* ROOM SELECTOR */
+        #room-selector { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+        .room-btn { background:linear-gradient(135deg,#1a1a2e,#16213e); color:#00d4ff; border:1px solid #00d4ff44; padding:12px 20px; border-radius:8px; cursor:pointer; font-family:'Orbitron',sans-serif; font-size:13px; transition:all 0.2s; }
+        .room-btn:hover { background:linear-gradient(135deg,#0073e6,#005bb5); border-color:#00d4ff; box-shadow:0 0 15px #00d4ff55; }
+        .room-btn .room-count { font-size:11px; opacity:0.7; margin-left:8px; }
+
+        /* MINI-MAP */
+        #minimap { position:fixed; bottom:15px; right:15px; width:180px; height:120px; background:rgba(0,0,0,0.7); border:1px solid #444; border-radius:8px; z-index:1500; }
+        #minimap canvas { width:100%; height:100%; border-radius:8px; }
+        #minimap-label { position:absolute; top:3px; left:6px; color:#aaa; font-size:9px; font-family:'Exo 2',sans-serif; letter-spacing:1px; }
+
+        /* CHAT */
+        #chat-container { position:fixed; bottom:15px; left:10px; width:260px; z-index:1500; font-family:'Exo 2',sans-serif; }
+        #chat-messages { background:rgba(0,0,0,0.65); border-radius:8px 8px 0 0; padding:8px; height:130px; overflow-y:auto; display:flex; flex-direction:column; gap:3px; }
+        #chat-messages .msg { font-size:12px; color:#ddd; line-height:1.3; word-break:break-word; }
+        #chat-messages .msg .pseudo { color:#00d4ff; font-weight:600; }
+        #chat-input-row { display:flex; }
+        #chat-input { flex:1; background:rgba(0,0,0,0.8); border:1px solid #444; border-radius:0 0 0 8px; color:white; padding:6px 8px; font-size:12px; font-family:'Exo 2',sans-serif; outline:none; }
+        #chat-send { background:#0073e6; border:none; color:white; padding:6px 10px; border-radius:0 0 8px 0; cursor:pointer; font-size:13px; }
+
+        /* XP BAR */
+        #xp-bar-container { position:fixed; top:10px; right:15px; z-index:1500; background:rgba(0,0,0,0.7); border-radius:20px; padding:6px 12px; font-family:'Exo 2',sans-serif; min-width:160px; display:none; }
+        #xp-bar-label { color:#ffd700; font-size:11px; font-weight:600; }
+        #xp-bar { height:6px; background:#333; border-radius:3px; margin-top:4px; }
+        #xp-bar-fill { height:100%; background:linear-gradient(90deg,#ffd700,#ff8c00); border-radius:3px; transition:width 0.5s; }
+
+        /* POWER-UPS */
+        .powerup-item { position:absolute; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; animation:pu-bounce 1s ease-in-out infinite alternate; pointer-events:none; z-index:200; box-shadow:0 0 12px rgba(255,255,255,0.5); }
+        @keyframes pu-bounce { from{transform:translateY(0) scale(1);} to{transform:translateY(-6px) scale(1.1);} }
+
+        /* PORTALS */
+        .portal { position:absolute; width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:150; }
+        .portal-A { background:radial-gradient(circle,#ff00ff88,transparent); border:2px solid #ff00ff; animation:portal-spin 2s linear infinite; box-shadow:0 0 20px #ff00ff; }
+        .portal-B { background:radial-gradient(circle,#00ffff88,transparent); border:2px solid #00ffff; animation:portal-spin 2s linear infinite reverse; box-shadow:0 0 20px #00ffff; }
+        @keyframes portal-spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+
+        /* OBSTACLES */
+        .obstacle { position:absolute; background:rgba(80,80,100,0.85); border:1px solid #555; border-radius:3px; pointer-events:none; z-index:50; }
+
+        /* POWER-UP STATUS */
+        #powerup-status { position:fixed; top:55px; left:10px; z-index:1500; display:flex; flex-direction:column; gap:4px; }
+        .pu-badge { background:rgba(0,0,0,0.75); color:white; padding:4px 10px; border-radius:12px; font-size:12px; font-family:'Exo 2',sans-serif; border-left:3px solid #ffd700; }
+
+        /* STREAK */
+        #streak-display { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); font-family:'Orbitron',sans-serif; font-size:48px; color:#ff6600; text-shadow:0 0 30px #ff6600; pointer-events:none; z-index:9000; opacity:0; transition:opacity 0.3s; }
+
+        /* INFECTION OVERLAY */
+        #infection-banner { display:none; position:fixed; top:60px; left:50%; transform:translateX(-50%); background:rgba(170,0,0,0.85); color:white; padding:8px 24px; border-radius:20px; font-family:'Orbitron',sans-serif; font-size:13px; z-index:2000; letter-spacing:2px; }
+
+        /* ROOM INFO */
+        #room-info { position:fixed; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.6); color:#00d4ff; padding:4px 16px; border-radius:12px; font-family:'Orbitron',sans-serif; font-size:11px; z-index:1500; display:none; letter-spacing:2px; }
+    
+        /* TIMER MANCHE */
+        #round-timer {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.75);
+            color: white;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 22px;
+            padding: 6px 20px;
+            border-radius: 20px;
+            z-index: 1600;
+            display: none;
+            letter-spacing: 3px;
+            border: 1px solid #ffffff22;
+        }
+        #round-timer.urgent { color: #ff4444; animation: blink 0.5s infinite alternate; }
+        @keyframes blink { from { opacity:1; } to { opacity:0.4; } }
+
+        /* FIN DE MANCHE */
+        #round-end-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 30px 40px;
+            border-radius: 16px;
+            z-index: 9000;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            display: none;
+            min-width: 280px;
+            border: 1px solid #ffd70044;
+            box-shadow: 0 0 40px rgba(255,215,0,0.2);
+        }
+        #round-end-overlay h2 { color: #ffd700; margin: 0 0 15px 0; font-size: 20px; letter-spacing: 2px; }
+        #round-scores { list-style: none; padding: 0; margin: 0 0 15px 0; }
+        #round-scores li { padding: 6px 0; border-bottom: 1px solid #333; font-size: 14px; }
+        #round-scores li:first-child { color: #ffd700; font-size: 16px; }
+        #round-next-countdown { color: #aaa; font-size: 13px; }
+    
+
+
+
+        /* === BOUTIQUE === */
+        #shop-panel {
+            display: none;
+            background: rgba(10,10,20,0.98);
+            padding: 0;
+            border-radius: 16px;
+            width: 700px;
+            max-width: 95vw;
+            max-height: 85vh;
+            overflow: hidden;
+            box-shadow: 0 0 60px rgba(0,212,255,0.3), 0 0 0 1px rgba(0,212,255,0.2);
+            font-family: 'Exo 2', sans-serif;
+            flex-direction: column;
+        }
+        #shop-panel.active { display: flex; }
+        .shop-header {
+            background: linear-gradient(135deg, #0a0a2e, #16213e);
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(0,212,255,0.2);
+        }
+        .shop-header h2 { margin:0; color:#00d4ff; font-family:'Orbitron',sans-serif; font-size:18px; letter-spacing:2px; }
+        #shop-coins-display { color:#ffd700; font-weight:700; font-size:16px; }
+        .shop-filters { display:flex; gap:8px; padding:12px 20px; background:rgba(0,0,0,0.3); flex-wrap:wrap; border-bottom:1px solid #ffffff11; }
+        .shop-filter-btn { background:transparent; border:1px solid #ffffff22; color:#aaa; padding:5px 14px; border-radius:20px; cursor:pointer; font-size:12px; font-family:'Exo 2',sans-serif; transition:all 0.2s; }
+        .shop-filter-btn:hover, .shop-filter-btn.active { background:#00d4ff22; border-color:#00d4ff; color:#00d4ff; }
+        .shop-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:12px; padding:16px; overflow-y:auto; flex:1; }
+        .shop-item {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .shop-item:hover { border-color: rgba(0,212,255,0.5); background: rgba(0,212,255,0.08); transform: translateY(-2px); }
+        .shop-item.owned { border-color: #00ff8844; background: rgba(0,255,136,0.06); cursor: default; }
+        .shop-item.owned:hover { transform: none; }
+        .shop-item .skin-preview {
+            width: 60px; height: 60px;
+            border-radius: 8px;
+            margin: 0 auto 10px;
+            border: 2px solid rgba(255,255,255,0.2);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .shop-item .skin-name { color: white; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+        .shop-item .skin-desc { color: #888; font-size: 11px; margin-bottom: 8px; }
+        .shop-item .skin-price { font-size: 13px; font-weight: 700; }
+        .shop-item .skin-price.affordable { color: #ffd700; }
+        .shop-item .skin-price.expensive { color: #ff4444; }
+        .shop-item .owned-badge { color: #00ff88; font-size: 12px; }
+        .tier-badge {
+            position: absolute; top: 6px; right: 6px;
+            font-size: 9px; padding: 2px 6px; border-radius: 8px; font-weight: 700;
+        }
+        .tier-1 { background: #555; color: #ddd; }
+        .tier-2 { background: #1a3a6e; color: #7bb8ff; }
+        .tier-3 { background: #4a1070; color: #d088ff; }
+        .tier-4 { background: #6e3a00; color: #ffbb44; }
+        .tier-5 { background: linear-gradient(135deg,#6e3a00,#4a1070); color: #ffd700; }
+
+        /* Coins flottants */
+        .coin-popup {
+            position: fixed;
+            color: #ffd700;
+            font-weight: 700;
+            font-size: 16px;
+            pointer-events: none;
+            z-index: 9999;
+            animation: coin-float 1.5s ease-out forwards;
+            font-family: 'Exo 2', sans-serif;
+            text-shadow: 0 0 10px #ffd700;
+        }
+        @keyframes coin-float {
+            from { opacity: 1; transform: translateY(0);    }
+            to   { opacity: 0; transform: translateY(-60px); }
+        }
+
+        /* Coins dans le HUD */
+        #coins-hud {
+            position: fixed;
+            top: 42px;
+            right: 15px;
+            background: rgba(0,0,0,0.7);
+            color: #ffd700;
+            font-family: 'Exo 2', sans-serif;
+            font-size: 13px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            z-index: 1500;
+            display: none;
+            font-weight: 700;
+        }
+    
+    
+    
+    
+    
     </style>
 </head>
 <body>
 
 <div id="game-layer" class="blurred"></div>
+<div id="coins-hud">🪙 <span id="coins-hud-val">0</span></div>
+<div id="infection-banner">🧟 MODE INFECTION ACTIF</div>
+
+<!-- TIMER MANCHE -->
+<div id="round-timer">05:00</div>
+
+<!-- FIN DE MANCHE -->
+<div id="round-end-overlay">
+    <h2>🏁 FIN DE MANCHE</h2>
+    <ul id="round-scores"></ul>
+    <div id="round-next-countdown">Nouvelle manche dans 5s...</div>
+</div>
+
+<div id="room-info"></div>
+<div id="streak-display"></div>
+
+<!-- XP BAR -->
+<div id="xp-bar-container">
+    <div id="xp-bar-label">Niv. 1 · 0 XP</div>
+    <div id="xp-bar"><div id="xp-bar-fill" style="width:0%"></div></div>
+</div>
+
+<!-- POWER-UP STATUS -->
+<div id="powerup-status"></div>
+
+<!-- MINI-MAP -->
+<div id="minimap" style="display:none;">
+    <div id="minimap-label">RADAR</div>
+    <canvas id="minimap-canvas" width="180" height="120"></canvas>
+</div>
+
+<!-- CHAT -->
+<div id="chat-container" style="display:none;">
+    <div id="chat-messages"></div>
+    <div id="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Message..." maxlength="100">
+        <button id="chat-send" onclick="sendChat()">➤</button>
+    </div>
+</div>
 <div id="global-msg"></div>
 
 <div id="ach-toast">
@@ -127,6 +370,7 @@
     <div id="ach-toast-msg"></div>
 </div>
 
+<!-- ROOM COUNTS (mis à jour en temps réel) -->
 <div id="menu-overlay">
     <h1 style="color:white; text-shadow:2px 2px 4px black; margin-bottom: 20px;">CUBE TAG</h1>
     
@@ -161,9 +405,17 @@
 
     <div id="lobby-panel" class="panel-box" style="display:none;">
         <h2 style="margin-top:0;">Bienvenue <span id="lobby-pseudo" style="color:#2196F3;"></span></h2>
-        <button class="lobby-btn btn-play" onclick="enterGame()">🎮 JOUER</button>
+        <button class="lobby-btn btn-play" onclick="showRoomSelector()">🎮 JOUER</button>
+        <div id="room-selector" style="display:none;">
+            <div style="font-size:13px; color:#555; margin-bottom:5px;">Choisir une arène :</div>
+            <button class="room-btn" onclick="enterGame('Arène 1')">⚔️ Arène 1 <span class="room-count" id="rc-0"></span></button>
+            <button class="room-btn" onclick="enterGame('Arène 2')">🏟️ Arène 2 <span class="room-count" id="rc-1"></span></button>
+            <button class="room-btn" onclick="enterGame('Arène 3')">🌋 Arène 3 <span class="room-count" id="rc-2"></span></button>
+        </div>
+
         <button class="lobby-btn btn-stats" onclick="openStats()">🏆 STATISTIQUES</button>
         <button class="lobby-btn" style="background: #e67e22;" onclick="openAchievements()">⭐ SUCCÈS & SKINS</button>
+        <button class="lobby-btn" style="background: linear-gradient(135deg, #f7971e, #ffd200);" onclick="openShop()">🛒 BOUTIQUE</button>
         <button class="lobby-btn btn-logout" onclick="doLogout()">Se déconnecter</button>
         <div id="afk-msg" style="color: red; margin-top: 10px; font-weight: bold; display: none;">Vous avez été exclu pour inactivité (AFK)</div>
     </div>
@@ -326,7 +578,33 @@
         </div>
         <button onclick="closeStats()" style="margin-top: 15px; background: #555; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer;">Retour au Lobby</button>
     </div>
+
+
+    <div id="shop-panel">
+    <div class="shop-header">
+        <h2>🛒 BOUTIQUE</h2>
+        <div style="display:flex; align-items:center; gap:20px;">
+            <div id="shop-coins-display">🪙 0 coins</div>
+            <button onclick="closeShop()" style="background:none; border:1px solid #ffffff33; color:white; padding:6px 14px; border-radius:8px; cursor:pointer; font-family:'Exo 2',sans-serif;">✕ Fermer</button>
+        </div>
+    </div>
+    <div class="shop-filters">
+        <button class="shop-filter-btn active" onclick="filterShop(0, this)">Tous</button>
+        <button class="shop-filter-btn" onclick="filterShop(1, this)">⬜ Communs (100)</button>
+        <button class="shop-filter-btn" onclick="filterShop(2, this)">🔵 Rares (250)</button>
+        <button class="shop-filter-btn" onclick="filterShop(3, this)">🟣 Épiques (500)</button>
+        <button class="shop-filter-btn" onclick="filterShop(4, this)">🟠 Légendaires (1000)</button>
+        <button class="shop-filter-btn" onclick="filterShop(5, this)">⭐ Mythiques (2500)</button>
+    </div>
+    <div class="shop-grid" id="shop-grid"></div>
+    </div>
 </div>
+
+
+
+
+
+
 
 <button id="toggle-btn" onclick="toggleUI()">Menu (H)</button>
 <button id="btn-leave" onclick="tryLeaveGame()">Quitter (L)</button>
@@ -344,6 +622,17 @@
     // --- GESTION DU TOKEN ---
     const storedToken = localStorage.getItem('cube_token');
     const socket = io({ auth: { token: storedToken } });
+
+    let currentRoom = null;
+    let powerupDOMs = {};
+    let minimapCtx = null;
+    let myLevel = 1, myXp = 0;
+
+
+    let myCoins = 0;
+    let shopSkins = [];
+    let shopCurrentTier = 0;
+    let myUnlockedSkins = [];
 
     let playersDOM = {};
     let playersData = {};
@@ -453,9 +742,20 @@
         document.getElementById('btn-leave').style.display = 'none';
         document.getElementById('ui-container').style.display = 'none';
         document.getElementById('menu-overlay').classList.remove('hidden');
+        document.getElementById('round-timer').style.display = 'none';
+        document.getElementById('round-end-overlay').style.display = 'none';
+        document.getElementById('coins-hud').style.display = 'none';
 
         const kofiWidget = document.querySelector('.floatingchat-container-wrap');
         if(kofiWidget) kofiWidget.style.display = 'block';
+
+        document.getElementById('minimap').style.display = 'none';
+        document.getElementById('chat-container').style.display = 'none';
+        document.getElementById('xp-bar-container').style.display = 'none';
+        document.getElementById('room-info').style.display = 'none';
+        document.getElementById('infection-banner').style.display = 'none';
+        document.getElementById('powerup-status').innerHTML = '';
+        currentRoom = null;
         
         isPlaying = false;
         
@@ -481,17 +781,30 @@
         if(myId) { socket.emit('leaveGame'); myId = null; }
     }
 
-    function enterGame() {
+    function showRoomSelector() {
+        const sel = document.getElementById('room-selector');
+        sel.style.display = sel.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    function enterGame(roomName) {
+        currentRoom = roomName;
         document.getElementById('menu-overlay').classList.add('hidden');
         document.getElementById('game-layer').classList.remove('blurred');
         document.getElementById('toggle-btn').style.display = 'block';
         document.getElementById('btn-leave').style.display = 'block';
         document.getElementById('ui-container').style.display = 'flex';
+        document.getElementById('minimap').style.display = 'block';
+        document.getElementById('chat-container').style.display = 'block';
+        document.getElementById('room-info').style.display = 'block';
+        document.getElementById('room-info').innerText = '⚔️ ' + roomName;
+        document.getElementById('coins-hud').style.display = 'block';
+        if (currentUserPseudo !== 'Invité') document.getElementById('xp-bar-container').style.display = 'block';
+        
 
-        const kofiWidget = document.querySelector('.floatingchat-container-wrap'); // C'est la classe utilisée par Ko-fi
+        const kofiWidget = document.querySelector('.floatingchat-container-wrap');
         if(kofiWidget) kofiWidget.style.display = 'none';
 
-        socket.emit('joinGame');
+        socket.emit('joinRoom', roomName);
         isPlaying = true;
     }
 
@@ -586,7 +899,80 @@
         setTimeout(() => { if (playersDOM[playerId]) playersDOM[playerId].remove(); delete playersDOM[playerId]; delete playersData[playerId]; }, 300);
     });
     socket.on('updateWolf', (wolfId) => { currentWolfId = wolfId; updateWolfVisuals(); });
-    socket.on('playerTagged', (data) => { spawnParticles(data.x, data.y, data.color, 30); });
+    socket.on('playerTagged', (data) => { spawnParticles(data.x, data.y, data.color, 30); playSound('tag'); });
+
+
+    socket.on('newRound', (data) => {
+    // Supprimer anciens obstacles
+    document.querySelectorAll('.obstacle').forEach(el => el.remove());
+    window._obstacles = data.obstacles;
+    // Recréer obstacles
+    data.obstacles.forEach(o => {
+        const el = document.createElement('div');
+        el.className = 'obstacle';
+        el.style.left = o.x + 'px';
+        el.style.top  = o.y + 'px';
+        el.style.width  = o.w + 'px';
+        el.style.height = o.h + 'px';
+        gameLayer.appendChild(el);
+    });
+
+
+    // Supprimer anciens portails
+    document.querySelectorAll('.portal').forEach(el => el.remove());
+    // Recréer portails
+    if (data.portals) {
+        window._portals = data.portals;
+        data.portals.forEach(p => {
+            const el = document.createElement('div');
+            el.className = 'portal portal-' + p.id;
+            el.style.left = p.x + 'px';
+            el.style.top  = p.y + 'px';
+            el.setAttribute('data-portalid', p.id);
+            gameLayer.appendChild(el);
+        });
+    }
+    // Cacher overlay fin de manche
+    document.getElementById('round-end-overlay').style.display = 'none';
+    document.getElementById('round-timer').style.display = 'block';
+    });
+
+    socket.on('roundTimer', (ms) => {
+        const timerEl = document.getElementById('round-timer');
+        const totalSec = Math.ceil(ms / 1000);
+        const min = String(Math.floor(totalSec / 60)).padStart(2, '0');
+        const sec = String(totalSec % 60).padStart(2, '0');
+        timerEl.innerText = `${min}:${sec}`;
+        timerEl.classList.toggle('urgent', totalSec <= 30);
+    });
+
+    socket.on('roundEnd', (data) => {
+        const overlay = document.getElementById('round-end-overlay');
+        const scoresList = document.getElementById('round-scores');
+        const medals = ['🥇', '🥈', '🥉'];
+        scoresList.innerHTML = '';
+        if (data.scores.length === 0) {
+            scoresList.innerHTML = '<li>Aucun tag cette manche</li>';
+        } else {
+            data.scores.forEach((s, i) => {
+                const li = document.createElement('li');
+                li.innerText = `${medals[i] || ''} ${s.pseudo} — ${s.tags} tag${s.tags > 1 ? 's' : ''}`;
+                scoresList.appendChild(li);
+            });
+        }
+        overlay.style.display = 'block';
+        playSound('levelup');
+
+        // Compte à rebours 5s
+        let cd = 5;
+        const cdEl = document.getElementById('round-next-countdown');
+        cdEl.innerText = `Nouvelle manche dans ${cd}s...`;
+        const cdInt = setInterval(() => {
+            cd--;
+            if (cd <= 0) { clearInterval(cdInt); cdEl.innerText = 'Chargement...'; }
+            else cdEl.innerText = `Nouvelle manche dans ${cd}s...`;
+        }, 1000);
+    });
 
     function createCube(id, info) {
         if (playersDOM[id]) return; 
@@ -613,6 +999,17 @@
             if (overlapX > 0 && overlapY > 0) {
                 if (myId === currentWolfId && (Date.now() - lastTagTime) > tagCooldownMs) { lastTagTime = Date.now(); socket.emit('tagPlayer', id); }
                 if (overlapX < overlapY) { if (newX < ox) newX -= (overlapX + 1); else newX += (overlapX + 1); } else { if (newY < oy) newY -= (overlapY + 1); else newY += (overlapY + 1); }
+            }
+        }
+        // Collision obstacles
+        if (window._obstacles) {
+            for (const o of window._obstacles) {
+                const overlapX = Math.min(newX + cubeSize, o.x + o.w) - Math.max(newX, o.x);
+                const overlapY = Math.min(newY + cubeSize, o.y + o.h) - Math.max(newY, o.y);
+                if (overlapX > 0 && overlapY > 0) {
+                    if (overlapX < overlapY) { if (newX < o.x) newX -= overlapX; else newX += overlapX; }
+                    else { if (newY < o.y) newY -= overlapY; else newY += overlapY; }
+                }
             }
         }
         return { x: newX, y: newY };
@@ -659,6 +1056,7 @@
             p.displayY = (p.displayY === undefined) ? p.serverY : p.displayY + (p.serverY - p.displayY) * lerpFactor;
             if (playersDOM[id]) playersDOM[id].style.transform = `translate3d(${p.displayX}px, ${p.displayY}px, 0)`;
         }
+        drawMinimap();
         requestAnimationFrame(animate);
     }
     function spawnParticles(x, y, color = '#fff', count = 20) {
@@ -1102,8 +1500,362 @@
     function toggleMaintenance() { sendAction('MAINTENANCE', {}); }
     function toggleGodMode() { /* Fonction supprimée */ }
 
-    document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h' && document.activeElement.tagName !== 'INPUT') toggleUI(); if (e.key.toLowerCase() === 'l' && isPlaying) tryLeaveGame(); if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = true; });
-    document.addEventListener('keyup', (e) => { if(keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = false; });
+
+    // OBSTACLES
+    socket.on('obstaclesInit', (obs) => {
+        obs.forEach(o => {
+            const el = document.createElement('div');
+            el.className = 'obstacle';
+            el.style.left = o.x + 'px'; el.style.top = o.y + 'px';
+            el.style.width = o.w + 'px'; el.style.height = o.h + 'px';
+            gameLayer.appendChild(el);
+        });
+        window._obstacles = obs;
+    });
+
+    // PORTALS
+    socket.on('portalsInit', (portals) => {
+        document.querySelectorAll('.portal').forEach(el => el.remove());
+        portals.forEach(p => {
+            const el = document.createElement('div');
+            el.className = 'portal portal-' + p.id;
+            el.style.left = p.x + 'px';
+            el.style.top  = p.y + 'px';
+            el.setAttribute('data-portalid', p.id);
+            gameLayer.appendChild(el);
+        });
+        window._portals = portals; // stocker pour la téléportation client
+    });
+
+    // POWER-UPS
+    socket.on('powerupsInit', (pus) => { pus.forEach(pu => addPowerupDOM(pu)); });
+    socket.on('spawnPowerup', (pu) => { addPowerupDOM(pu); playSound('spawn'); });
+    socket.on('collectPowerup', (data) => {
+        removePowerupDOM(data.uid);
+        if (data.playerId === myId) {
+            applyPowerupVisual(data.type, data.duration);
+            playSound('powerup');
+        }
+    });
+    socket.on('powerupExpired', (type) => { removePowerupBadge(type); });
+    socket.on('teleport', (pos) => { myX = pos.x; myY = pos.y; playSound('teleport'); });
+    socket.on('infectionMode', (active) => {
+        document.getElementById('infection-banner').style.display = active ? 'block' : 'none';
+    });
+    socket.on('infectedPlayer', (id) => {
+        if (playersDOM[id]) { playersDOM[id].classList.add('wolf'); playersDOM[id].innerText = '🧟'; }
+    });
+    socket.on('xpUpdate', (data) => { updateXPBar(data.xp, data.level); });
+    socket.on('chatMessage', (entry) => { appendChat(entry); });
+    socket.on('chatHistory', (history) => { history.forEach(e => appendChat(e)); });
+    socket.on('roomFull', () => { alert("Cette arène est pleine ! Essaie une autre."); });
+
+    // MINI-MAP init
+    window.addEventListener('load', () => {
+        const c = document.getElementById('minimap-canvas');
+        if(c) minimapCtx = c.getContext('2d');
+    });
+
+    function addPowerupDOM(pu) {
+        const el = document.createElement('div');
+        el.className = 'powerup-item';
+        el.id = 'pu-' + pu.uid;
+        el.innerText = pu.label;
+        el.style.left = pu.x + 'px'; el.style.top = pu.y + 'px';
+        el.style.background = pu.color + '55';
+        el.style.border = '2px solid ' + pu.color;
+        gameLayer.appendChild(el);
+        powerupDOMs[pu.uid] = el;
+    }
+
+    function removePowerupDOM(uid) {
+        if (powerupDOMs[uid]) { powerupDOMs[uid].remove(); delete powerupDOMs[uid]; }
+    }
+
+    function applyPowerupVisual(type, duration) {
+        const labels = { shield:'🛡️ Bouclier', speed:'⚡ Vitesse', invisible:'👻 Invisible' };
+        const colors = { shield:'#00aaff', speed:'#ffdd00', invisible:'#aaffaa' };
+        const badge = document.createElement('div');
+        badge.className = 'pu-badge';
+        badge.id = 'pus-' + type;
+        badge.style.borderLeftColor = colors[type] || '#ffd700';
+        badge.innerText = (labels[type] || type);
+        document.getElementById('powerup-status').appendChild(badge);
+        setTimeout(() => removePowerupBadge(type), duration);
+    }
+
+    function removePowerupBadge(type) {
+        const b = document.getElementById('pus-' + type);
+        if(b) b.remove();
+    }
+
+    function updateXPBar(xp, level) {
+        myXp = xp; myLevel = level;
+        const xpForCurrent = (level-1)*(level-1)*100;
+        const xpForNext = level*level*100;
+        const pct = Math.min(100, ((xp - xpForCurrent) / (xpForNext - xpForCurrent)) * 100);
+        document.getElementById('xp-bar-label').innerText = `Niv. ${level} · ${xp} XP`;
+        document.getElementById('xp-bar-fill').style.width = pct + '%';
+    }
+
+    function appendChat(entry) {
+        const div = document.createElement('div');
+        div.className = 'msg';
+        div.innerHTML = `<span class="pseudo">${entry.pseudo}</span> : ${entry.msg}`;
+        const box = document.getElementById('chat-messages');
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function sendChat() {
+        const inp = document.getElementById('chat-input');
+        const msg = inp.value.trim();
+        if (!msg) return;
+        socket.emit('chatMessage', msg);
+        inp.value = '';
+    }
+
+
+
+
+    // === COINS ===
+    socket.on('coinsUpdate', (coins) => {
+        myCoins = coins;
+        updateCoinsDisplay();
+        // Popup +coins si gain
+        if (coins > myCoins) {
+            const diff = coins - myCoins;
+            showCoinPopup('+' + diff + ' 🪙');
+        }
+    });
+
+    function updateCoinsDisplay() {
+        document.getElementById('shop-coins-display').innerText = '🪙 ' + myCoins + ' coins';
+        document.getElementById('coins-hud-val').innerText = myCoins;
+    }
+
+    function showCoinPopup(text) {
+        const el = document.createElement('div');
+        el.className = 'coin-popup';
+        el.innerText = text;
+        el.style.left = (window.innerWidth / 2 - 30) + 'px';
+        el.style.top  = (window.innerHeight / 2 - 50) + 'px';
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 1500);
+    }
+
+    // === BOUTIQUE ===
+    async function openShop() {
+        document.getElementById('lobby-panel').style.display = 'none';
+        document.getElementById('shop-panel').classList.add('active');
+
+        // Charger coins
+        const token = localStorage.getItem('cube_token');
+        if (token) {
+            const r = await fetch('/api/coins', { headers: { 'Authorization': 'Bearer ' + token } });
+            const d = await r.json();
+            if (d.success) { myCoins = d.coins; updateCoinsDisplay(); }
+        }
+
+        // Charger skins possédés
+        if (currentUserPseudo && currentUserPseudo !== 'Invité') {
+            const r2 = await fetch('/api/my-achievements/' + encodeURIComponent(currentUserPseudo));
+            const d2 = await r2.json();
+            if (d2.success) myUnlockedSkins = d2.unlockedSkins || [];
+        }
+
+        // Charger skins boutique
+        const r3 = await fetch('/api/shop');
+        const d3 = await r3.json();
+        if (d3.success) { shopSkins = d3.skins; renderShop(); }
+    }
+
+    function closeShop() {
+        document.getElementById('shop-panel').classList.remove('active');
+        document.getElementById('lobby-panel').style.display = 'block';
+    }
+
+    function filterShop(tier, btn) {
+        shopCurrentTier = tier;
+        document.querySelectorAll('.shop-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderShop();
+    }
+
+    function renderShop() {
+        const grid = document.getElementById('shop-grid');
+        grid.innerHTML = '';
+        const filtered = shopCurrentTier === 0 ? shopSkins : shopSkins.filter(s => s.tier === shopCurrentTier);
+        const tierLabels = ['', '⬜', '🔵', '🟣', '🟠', '⭐'];
+        const tierNames  = ['', 'Commun', 'Rare', 'Épique', 'Légendaire', 'Mythique'];
+
+        filtered.forEach(skin => {
+            const owned = myUnlockedSkins.includes(skin.value);
+            const canAfford = myCoins >= skin.price;
+
+            const item = document.createElement('div');
+            item.className = 'shop-item' + (owned ? ' owned' : '');
+
+            // Preview du skin
+            const preview = document.createElement('div');
+            preview.className = 'skin-preview';
+            // Appliquer le skin à la preview
+            if (skin.value.startsWith('skin-')) {
+                preview.classList.add(skin.value);
+            } else if (skin.value.startsWith('http')) {
+                preview.style.backgroundImage = `url('${skin.value}')`;
+                preview.style.backgroundSize = 'cover';
+            } else {
+                preview.style.background = skin.value;
+            }
+
+            const tierBadge = document.createElement('div');
+            tierBadge.className = 'tier-badge tier-' + skin.tier;
+            tierBadge.innerText = tierLabels[skin.tier] + ' ' + tierNames[skin.tier];
+
+            const name = document.createElement('div');
+            name.className = 'skin-name';
+            name.innerText = skin.name;
+
+            const desc = document.createElement('div');
+            desc.className = 'skin-desc';
+            desc.innerText = skin.desc;
+
+            const price = document.createElement('div');
+            if (owned) {
+                price.className = 'owned-badge';
+                price.innerText = '✅ Possédé';
+            } else {
+                price.className = 'skin-price ' + (canAfford ? 'affordable' : 'expensive');
+                price.innerText = '🪙 ' + skin.price;
+            }
+
+            item.appendChild(tierBadge);
+            item.appendChild(preview);
+            item.appendChild(name);
+            item.appendChild(desc);
+            item.appendChild(price);
+
+            if (!owned) {
+                item.onclick = () => buySkin(skin);
+            } else {
+                item.onclick = () => {
+                    applySkin(skin.value);
+                    closeShop();
+                };
+                item.title = 'Cliquer pour équiper';
+            }
+
+            grid.appendChild(item);
+        });
+
+        if (filtered.length === 0) {
+            grid.innerHTML = '<div style="color:#888; text-align:center; padding:40px; grid-column:1/-1;">Aucun skin dans cette catégorie</div>';
+        }
+    }
+
+    async function buySkin(skin) {
+        if (currentUserPseudo === 'Invité' || !currentUserPseudo) {
+            alert('Connecte-toi pour acheter des skins !');
+            return;
+        }
+        if (myCoins < skin.price) {
+            alert(`Pas assez de coins ! Il te faut ${skin.price - myCoins} coins de plus.`);
+            return;
+        }
+        if (!confirm(`Acheter "${skin.name}" pour 🪙 ${skin.price} coins ?`)) return;
+
+        const token = localStorage.getItem('cube_token');
+        const res = await fetch('/api/shop/buy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ skinId: skin.id })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            myCoins = data.newCoins;
+            myUnlockedSkins.push(skin.value);
+            updateCoinsDisplay();
+            showCoinPopup('-' + skin.price + ' 🪙');
+            renderShop();
+            showToast('🛒 Achat réussi !', `Tu possèdes maintenant "${skin.name}" !`);
+            playSound('levelup');
+        } else {
+            alert('Erreur : ' + data.message);
+        }
+    }
+
+
+
+
+
+
+    // Envoyer avec Entrée
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && document.activeElement === document.getElementById('chat-input')) {
+            sendChat(); return;
+        }
+    });
+
+    // Sons (Web Audio API)
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function getAudioCtx() { if (!audioCtx) audioCtx = new AudioCtx(); return audioCtx; }
+    function playSound(type) {
+        try {
+            const ctx = getAudioCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            if (type === 'tag')      { osc.frequency.value = 880; gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15); }
+            if (type === 'powerup')  { osc.frequency.value = 1200; osc.frequency.linearRampToValueAtTime(1600, ctx.currentTime+0.1); gain.gain.setValueAtTime(0.2, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2); }
+            if (type === 'teleport') { osc.frequency.value = 400; osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime+0.2); gain.gain.setValueAtTime(0.2, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3); }
+            if (type === 'spawn')    { osc.frequency.value = 600; gain.gain.setValueAtTime(0.1, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); }
+            if (type === 'levelup')  { osc.frequency.value = 523; osc.frequency.linearRampToValueAtTime(1046, ctx.currentTime+0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5); }
+            osc.start(); osc.stop(ctx.currentTime + 0.5);
+        } catch(e) {}
+    }
+
+    // Mini-map rendering (dans la boucle animate)
+    function drawMinimap() {
+        if (!minimapCtx || !isPlaying) return;
+        const mw = 180, mh = 120;
+        const scaleX = mw / window.innerWidth, scaleY = mh / window.innerHeight;
+        minimapCtx.clearRect(0, 0, mw, mh);
+        minimapCtx.fillStyle = 'rgba(0,0,0,0.5)';
+        minimapCtx.fillRect(0, 0, mw, mh);
+        // Obstacles
+        if (window._obstacles) {
+            minimapCtx.fillStyle = '#555';
+            window._obstacles.forEach(o => minimapCtx.fillRect(o.x*scaleX, o.y*scaleY, o.w*scaleX, o.h*scaleY));
+        }
+        // Autres joueurs
+        for (const id in playersData) {
+            if (id === myId) continue;
+            const p = playersData[id];
+            minimapCtx.fillStyle = id === currentWolfId ? '#ff0000' : '#aaaaaa';
+            minimapCtx.fillRect(p.displayX*scaleX - 2, p.displayY*scaleY - 2, 5, 5);
+        }
+        // Moi
+        if (myId) {
+            minimapCtx.fillStyle = '#00ff88';
+            minimapCtx.fillRect(myX*scaleX - 3, myY*scaleY - 3, 7, 7);
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        const isTyping = document.activeElement.tagName === 'INPUT' 
+                    || document.activeElement.tagName === 'TEXTAREA';
+        if (e.key.toLowerCase() === 'h' && !isTyping) toggleUI();
+        if (e.key.toLowerCase() === 'l' && isPlaying && !isTyping) tryLeaveGame();
+        if (keysPressed.hasOwnProperty(e.key) && !isTyping) keysPressed[e.key] = true;
+    });
+    document.addEventListener('keyup', (e) => {
+        // Remplace aussi le keyup existant
+        if (keysPressed.hasOwnProperty(e.key)) keysPressed[e.key] = false;
+    });
+
     let lastFrameTime = performance.now();
     initFxCanvas(); requestAnimationFrame(animate);
 </script>
