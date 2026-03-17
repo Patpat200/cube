@@ -103,6 +103,21 @@ const ConnStatSchema = new mongoose.Schema({
 });
 const ConnStat = mongoose.model("ConnStat", ConnStatSchema);
 
+// SKIN CRÉATIONS
+const SkinSubmissionSchema = new mongoose.Schema({
+    authorPseudo: { type: String, required: true },
+    name: { type: String, required: true },
+    description: { type: String, default: "" },
+    cssCode: { type: String, required: true },
+    previewData: { type: String, required: true }, // base64 snapshot
+    status: { type: String, default: "pending" }, // pending / approved / rejected
+    linkedAchId: { type: String, default: null },
+    linkedAchName: { type: String, default: null },
+    linkedAchDesc: { type: String, default: null },
+    createdAt: { type: Date, default: Date.now },
+});
+const SkinSubmission = mongoose.model("SkinSubmission", SkinSubmissionSchema);
+
 const io = require("socket.io")(http, { maxHttpBufferSize: 5 * 1024 * 1024 });
 
 // --- VARIABLES JEU ---
@@ -815,7 +830,27 @@ app.get("/api/shop", (req, res) => {
 // BOUTIQUE : Acheter un skin
 app.post("/api/shop/buy", authenticateToken, async (req, res) => {
     const { skinId } = req.body;
-    const skin = SHOP_SKINS.find((s) => s.id === skinId);
+
+    // Chercher dans skins normaux OU communautaires
+    let skin = SHOP_SKINS.find((s) => s.id === skinId);
+    let isCommunity = false;
+
+    if (!skin && skinId.startsWith("community_")) {
+        const mongoId = skinId.replace("community_", "");
+        const sub = await SkinSubmission.findById(mongoId).select(
+            "name authorPseudo _id",
+        );
+        if (sub) {
+            skin = {
+                id: skinId,
+                name: sub.name,
+                price: 150,
+                value: "skin-custom-" + sub._id.toString().slice(-8),
+            };
+            isCommunity = true;
+        }
+    }
+
     if (!skin)
         return res.json({ success: false, message: "Skin introuvable." });
 
@@ -831,12 +866,11 @@ app.post("/api/shop/buy", authenticateToken, async (req, res) => {
         if ((user.coins || 0) < skin.price)
             return res.json({
                 success: false,
-                message: `Pas assez de coins ! (${skin.price - user.coins} manquants)`,
+                message: `Pas assez de coins ! (${skin.price - (user.coins || 0)} manquants)`,
             });
 
         user.coins -= skin.price;
         user.unlockedSkins.push(skin.value);
-        // Stocker le nom du skin
         if (!ALL_SKIN_NAMES[skin.value]) ALL_SKIN_NAMES[skin.value] = skin.name;
         await user.save();
 
@@ -855,6 +889,240 @@ app.get("/api/coins", authenticateToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select("coins");
         res.json({ success: true, coins: user ? user.coins || 0 : 0 });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// === ÉDITEUR DE SKIN ===
+
+// Soumettre un skin
+app.post("/api/skin-editor/submit", authenticateToken, async (req, res) => {
+    const { name, description, cssCode, previewData } = req.body;
+    if (!name || !cssCode || !previewData)
+        return res.json({ success: false, message: "Champs manquants." });
+    if (cssCode.length > 5000)
+        return res.json({
+            success: false,
+            message: "CSS trop long (max 5000 caractères).",
+        });
+    if (name.length > 30)
+        return res.json({ success: false, message: "Nom trop long." });
+
+    // Vérif pas de JS dans le CSS
+    const forbidden = [
+        "javascript",
+        "expression(",
+        "url(",
+        "import",
+        "@import",
+        "behavior:",
+    ];
+    for (const f of forbidden) {
+        if (cssCode.toLowerCase().includes(f))
+            return res.json({
+                success: false,
+                message: "CSS non autorisé (contenu interdit).",
+            });
+    }
+
+    try {
+        // Max 3 soumissions en attente par joueur
+        const pending = await SkinSubmission.countDocuments({
+            authorPseudo: req.user.pseudo,
+            status: "pending",
+        });
+        if (pending >= 3)
+            return res.json({
+                success: false,
+                message: "Tu as déjà 3 skins en attente.",
+            });
+
+        await SkinSubmission.create({
+            authorPseudo: req.user.pseudo,
+            name,
+            description,
+            cssCode,
+            previewData: previewData.slice(0, 200000), // limite base64
+        });
+        res.json({
+            success: true,
+            message: "Skin soumis ! Les admins vont le vérifier.",
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Erreur serveur." });
+    }
+});
+
+// Mes soumissions
+app.get(
+    "/api/skin-editor/my-submissions",
+    authenticateToken,
+    async (req, res) => {
+        try {
+            const subs = await SkinSubmission.find({
+                authorPseudo: req.user.pseudo,
+            })
+                .select("-previewData")
+                .sort({ createdAt: -1 });
+            res.json({ success: true, submissions: subs });
+        } catch (e) {
+            res.status(500).json({ success: false });
+        }
+    },
+);
+
+// ADMIN : Liste toutes les soumissions
+app.get("/api/admin/skin-submissions", verifyAdmin, async (req, res) => {
+    try {
+        const subs = await SkinSubmission.find().sort({ createdAt: -1 });
+        res.json({ success: true, submissions: subs });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// ADMIN : Approuver un skin
+app.post(
+    "/api/admin/skin-submissions/approve",
+    verifyAdmin,
+    async (req, res) => {
+        const { submissionId, achId, achName, achDesc } = req.body;
+        try {
+            const sub = await SkinSubmission.findById(submissionId);
+            if (!sub)
+                return res.json({
+                    success: false,
+                    message: "Soumission introuvable.",
+                });
+
+            const skinClassId = "skin-custom-" + sub._id.toString().slice(-8);
+            sub.status = "approved";
+            sub.linkedAchId = achId || null;
+            sub.linkedAchName = achName || null;
+            sub.linkedAchDesc = achDesc || null;
+            await sub.save();
+
+            // Donner le skin + coins à l'auteur
+            const author = await User.findOne({ pseudo: sub.authorPseudo });
+            if (author) {
+                if (!author.unlockedSkins.includes(skinClassId))
+                    author.unlockedSkins.push(skinClassId);
+                author.coins = (author.coins || 0) + 100;
+                await author.save();
+                ALL_SKIN_NAMES[skinClassId] = sub.name;
+            }
+
+            // Notifier l'auteur s'il est connecté
+            const authorSocket = [...io.sockets.sockets.values()].find(
+                (s) => s.user && s.user.pseudo === sub.authorPseudo,
+            );
+            if (authorSocket) {
+                authorSocket.emit("serverMessage", {
+                    text: `🎨 Ton skin "${sub.name}" a été approuvé ! Tu reçois +100 🪙`,
+                    color: "#00d4ff",
+                });
+                authorSocket.emit("skinApproved", {
+                    skinClassId,
+                    skinName: sub.name,
+                    coinsGained: 100,
+                });
+                authorSocket.emit("coinsUpdate", author ? author.coins : 0);
+            }
+
+            await addLog(
+                "APPROVE_SKIN",
+                req.user.pseudo,
+                sub.authorPseudo,
+                `Skin: ${sub.name}`,
+            );
+            res.json({
+                success: true,
+                skinClassId,
+                skinName: sub.name,
+                authorPseudo: sub.authorPseudo,
+            });
+        } catch (e) {
+            res.status(500).json({ success: false });
+        }
+    },
+);
+
+// ADMIN : Rejeter un skin
+app.post(
+    "/api/admin/skin-submissions/reject",
+    verifyAdmin,
+    async (req, res) => {
+        const { submissionId, reason } = req.body;
+        try {
+            const sub = await SkinSubmission.findById(submissionId);
+            if (!sub)
+                return res.json({
+                    success: false,
+                    message: "Soumission introuvable.",
+                });
+            sub.status = "rejected";
+            await sub.save();
+
+            const authorSocket = [...io.sockets.sockets.values()].find(
+                (s) => s.user && s.user.pseudo === sub.authorPseudo,
+            );
+            if (authorSocket) {
+                authorSocket.emit("serverMessage", {
+                    text: `❌ Ton skin "${sub.name}" a été refusé. ${reason ? "Raison : " + reason : ""}`,
+                    color: "#ff4444",
+                });
+            }
+
+            await addLog(
+                "REJECT_SKIN",
+                req.user.pseudo,
+                sub.authorPseudo,
+                `Skin: ${sub.name} | Raison: ${reason || "?"}`,
+            );
+            res.json({ success: true });
+        } catch (e) {
+            res.status(500).json({ success: false });
+        }
+    },
+);
+
+// Récupérer le CSS de tous les skins approuvés (injecté côté client)
+app.get("/api/skin-editor/approved-css", async (req, res) => {
+    try {
+        const approved = await SkinSubmission.find({
+            status: "approved",
+        }).select("cssCode _id name authorPseudo description");
+        let css = "";
+        approved.forEach((s) => {
+            const classId = "skin-custom-" + s._id.toString().slice(-8);
+            const wrapped = s.cssCode.replace(/\.skin-preview/g, "." + classId);
+            css += `/* ${s.name} by ${s.authorPseudo} */\n${wrapped}\n\n`;
+        });
+        res.set("Content-Type", "text/css");
+        res.send(css);
+    } catch (e) {
+        res.status(500).send("");
+    }
+});
+
+// Liste des skins communautaires pour la boutique
+app.get("/api/skin-editor/community-skins", async (req, res) => {
+    try {
+        const approved = await SkinSubmission.find({ status: "approved" })
+            .select("_id name authorPseudo description createdAt")
+            .sort({ createdAt: -1 });
+        const skins = approved.map((s) => ({
+            id: "community_" + s._id.toString(),
+            skinId: s._id.toString(),
+            name: s.name,
+            author: s.authorPseudo,
+            description: s.description || "",
+            price: 150,
+            tier: 6,
+            value: "skin-custom-" + s._id.toString().slice(-8),
+        }));
+        res.json({ success: true, skins });
     } catch (e) {
         res.status(500).json({ success: false });
     }
@@ -1067,14 +1335,16 @@ io.on("connection", async (socket) => {
             invisible: p.invisible,
         });
 
-// Vérif portails
+        // Vérif portails
         const currentPortals = roomPortals[roomName] || [];
         for (const portal of currentPortals) {
             if (
                 Math.abs(p.x - portal.x) < 40 &&
                 Math.abs(p.y - portal.y) < 40
             ) {
-                const dest = currentPortals.find(pp => pp.id === portal.pairId);
+                const dest = currentPortals.find(
+                    (pp) => pp.id === portal.pairId,
+                );
                 if (dest) {
                     p.x = dest.x + 50;
                     p.y = dest.y + 50;
