@@ -761,8 +761,8 @@
                 flex: 1;
             }
             .shop-item {
-                background: rgba(255,255,255,0.04);
-                border: 1px solid rgba(255,255,255,0.1);
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 12px;
                 padding: 12px;
                 padding-top: 28px;
@@ -821,9 +821,16 @@
                 font-size: 12px;
             }
             .tier-badge {
-                position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-                font-size: 9px; padding: 2px 10px; border-radius: 8px; font-weight: 700;
-                white-space: nowrap; z-index: 2;
+                position: absolute;
+                top: 8px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 9px;
+                padding: 2px 10px;
+                border-radius: 8px;
+                font-weight: 700;
+                white-space: nowrap;
+                z-index: 2;
             }
             .tier-1 {
                 background: #555;
@@ -2861,10 +2868,25 @@
             socket.on("codeError", (msg) => {
                 alert("Code Erreur : " + msg);
             });
+
+            function escapeHtml(value) {
+                return String(value ?? "")
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/\"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
             function showToast(title, desc) {
                 const toast = document.getElementById("ach-toast");
-                const str = `<strong>${title}</strong><br>${desc}`;
-                document.getElementById("ach-toast-msg").innerHTML = str;
+                const msgEl = document.getElementById("ach-toast-msg");
+                msgEl.textContent = "";
+                const strong = document.createElement("strong");
+                strong.textContent = String(title ?? "");
+                msgEl.appendChild(strong);
+                msgEl.appendChild(document.createElement("br"));
+                msgEl.appendChild(document.createTextNode(String(desc ?? "")));
                 toast.style.right = "20px";
                 setTimeout(() => {
                     toast.style.right = "-300px";
@@ -3435,13 +3457,23 @@
                         data.achievements.forEach((ach) => {
                             const div = document.createElement("div");
                             div.className = `ach-item ${ach.unlocked ? "unlocked" : "locked"}`;
-                            div.innerHTML = `
-                            <div>
-                                <div style="font-weight:bold;">${ach.name}</div>
-                                <div style="font-size:12px;">${ach.desc}</div>
-                            </div>
-                            <div style="font-size:20px;">${ach.unlocked ? "✅" : "🔒"}</div>
-                        `;
+
+                            const left = document.createElement("div");
+                            const nameEl = document.createElement("div");
+                            nameEl.style.fontWeight = "bold";
+                            nameEl.textContent = ach.name;
+                            const descEl = document.createElement("div");
+                            descEl.style.fontSize = "12px";
+                            descEl.textContent = ach.desc;
+                            left.appendChild(nameEl);
+                            left.appendChild(descEl);
+
+                            const right = document.createElement("div");
+                            right.style.fontSize = "20px";
+                            right.textContent = ach.unlocked ? "✅" : "🔒";
+
+                            div.appendChild(left);
+                            div.appendChild(right);
                             listDiv.appendChild(div);
                         });
 
@@ -3592,7 +3624,21 @@
                     logsUl.innerHTML = "";
                     data.logs.forEach((l) => {
                         const li = document.createElement("li");
-                        li.innerHTML = `<b>[${l.action}]</b> ${l.admin} -> ${l.target || "?"} : ${l.details} <i style='color:grey; font-size:10px;'>${new Date(l.timestamp).toLocaleTimeString()}</i>`;
+                        const actionEl = document.createElement("b");
+                        actionEl.textContent = `[${l.action}]`;
+                        li.appendChild(actionEl);
+                        li.appendChild(
+                            document.createTextNode(
+                                ` ${l.admin} -> ${l.target || "?"} : ${l.details} `,
+                            ),
+                        );
+                        const timeEl = document.createElement("i");
+                        timeEl.style.color = "grey";
+                        timeEl.style.fontSize = "10px";
+                        timeEl.textContent = new Date(
+                            l.timestamp,
+                        ).toLocaleTimeString();
+                        li.appendChild(timeEl);
                         li.style.borderBottom = "1px solid #eee";
                         logsUl.appendChild(li);
                     });
@@ -3659,15 +3705,42 @@
                 tbody.innerHTML = "";
                 users.forEach((u) => {
                     const tr = document.createElement("tr");
-                    tr.innerHTML = `
-                <td style="padding:4px;"><strong>${u.pseudo}</strong> ${u.isAdmin ? "⭐" : ""}</td>
-                <td style="text-align:center;">${u.tagsInflicted}</td>
-                <td style="text-align:center;">${Math.round(u.distanceTraveled)}</td>
-                <td style="color:${u.isBanned ? "red" : "green"}; text-align:center;">${u.isBanned ? "OUI" : "NON"}</td>
-                <td style="text-align:right;">
-                    <button onclick="editUser('${u._id}')">✏️</button>
-                </td>
-            `;
+
+                    const pseudoTd = document.createElement("td");
+                    pseudoTd.style.padding = "4px";
+                    const pseudoStrong = document.createElement("strong");
+                    pseudoStrong.textContent = u.pseudo;
+                    pseudoTd.appendChild(pseudoStrong);
+                    if (u.isAdmin)
+                        pseudoTd.appendChild(document.createTextNode(" ⭐"));
+
+                    const tagsTd = document.createElement("td");
+                    tagsTd.style.textAlign = "center";
+                    tagsTd.textContent = String(u.tagsInflicted ?? 0);
+
+                    const distanceTd = document.createElement("td");
+                    distanceTd.style.textAlign = "center";
+                    distanceTd.textContent = String(
+                        Math.round(Number(u.distanceTraveled) || 0),
+                    );
+
+                    const bannedTd = document.createElement("td");
+                    bannedTd.style.textAlign = "center";
+                    bannedTd.style.color = u.isBanned ? "red" : "green";
+                    bannedTd.textContent = u.isBanned ? "OUI" : "NON";
+
+                    const actionTd = document.createElement("td");
+                    actionTd.style.textAlign = "right";
+                    const editBtn = document.createElement("button");
+                    editBtn.textContent = "✏️";
+                    editBtn.addEventListener("click", () => editUser(u._id));
+                    actionTd.appendChild(editBtn);
+
+                    tr.appendChild(pseudoTd);
+                    tr.appendChild(tagsTd);
+                    tr.appendChild(distanceTd);
+                    tr.appendChild(bannedTd);
+                    tr.appendChild(actionTd);
                     tbody.appendChild(tr);
                 });
             }
@@ -3984,7 +4057,13 @@
             function appendChat(entry) {
                 const div = document.createElement("div");
                 div.className = "msg";
-                div.innerHTML = `<span class="pseudo">${entry.pseudo}</span> : ${entry.msg}`;
+                const pseudoEl = document.createElement("span");
+                pseudoEl.className = "pseudo";
+                pseudoEl.textContent = String(entry.pseudo ?? "Joueur");
+                div.appendChild(pseudoEl);
+                div.appendChild(
+                    document.createTextNode(` : ${String(entry.msg ?? "")}`),
+                );
                 const box = document.getElementById("chat-messages");
                 box.appendChild(div);
                 box.scrollTop = box.scrollHeight;
@@ -4541,13 +4620,13 @@
 
                         const infoDiv = document.createElement("div");
                         infoDiv.innerHTML = `
-                    <div style="font-weight:700; margin-bottom:3px;">${s.name}</div>
-                    <div style="color:#888; font-size:11px; margin-bottom:4px;">Par <strong style="color:#00d4ff;">${s.authorPseudo}</strong></div>
-                    <div style="color:#666; font-size:11px; margin-bottom:6px;">${s.description || ""}</div>
+                    <div style="font-weight:700; margin-bottom:3px;">${escapeHtml(s.name)}</div>
+                    <div style="color:#888; font-size:11px; margin-bottom:4px;">Par <strong style="color:#00d4ff;">${escapeHtml(s.authorPseudo)}</strong></div>
+                    <div style="color:#666; font-size:11px; margin-bottom:6px;">${escapeHtml(s.description || "")}</div>
                     <div style="color:${statusColors[s.status]}; font-size:11px; margin-bottom:8px;">${statusLabels[s.status]}</div>
                     <details style="font-size:10px; color:#555;">
                         <summary style="cursor:pointer; color:#666;">Voir CSS</summary>
-                        <pre style="background:#0d1117; padding:6px; border-radius:4px; max-height:80px; overflow:auto; color:#e6edf3; margin-top:4px;">${s.cssCode.replace(/</g, "&lt;")}</pre>
+                        <pre style="background:#0d1117; padding:6px; border-radius:4px; max-height:80px; overflow:auto; color:#e6edf3; margin-top:4px;">${escapeHtml(s.cssCode)}</pre>
                     </details>
                 `;
 

@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const app = express();
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
 const http = require("http").createServer(app);
 const path = require("path");
 const axios = require("axios");
@@ -30,6 +31,10 @@ app.use(
         contentSecurityPolicy: false,
     }),
 );
+app.use((req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    next();
+});
 
 // --- CONFIGURATION SKINS ---
 const ALL_SKIN_NAMES = {};
@@ -125,6 +130,7 @@ let players = {};
 let currentBackground = null;
 let wolfId = null;
 let uploadCooldowns = {};
+let chatCooldowns = {};
 
 // --- ROOMS ---
 let rooms = {};
@@ -396,7 +402,94 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/api/", apiLimiter);
 
 function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return String(string).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const PSEUDO_REGEX = /^[A-Za-z0-9_-]{3,12}$/;
+
+function sanitizeBasicText(value, maxLen = 120) {
+    if (typeof value !== "string") return "";
+    return value
+        .replace(/[\u0000-\u001F\u007F]/g, "")
+        .replace(/[<>"'`]/g, "")
+        .trim()
+        .slice(0, maxLen);
+}
+
+function normalizePseudo(value) {
+    if (typeof value !== "string") return null;
+    const pseudo = value.trim();
+    if (!PSEUDO_REGEX.test(pseudo)) return null;
+    return pseudo;
+}
+
+function normalizePassword(value) {
+    if (typeof value !== "string") return null;
+    const password = value.trim();
+    if (password.length < 8 || password.length > 72) return null;
+    return password;
+}
+
+function normalizeLegacyPseudoForLogin(value) {
+    if (typeof value !== "string") return null;
+    const pseudo = value.trim();
+    if (!pseudo || pseudo.length > 30) return null;
+    if (/[\u0000-\u001F\u007F]/.test(pseudo)) return null;
+    return pseudo;
+}
+
+function normalizeLegacyPasswordForLogin(value) {
+    if (typeof value !== "string") return null;
+    const password = value.trim();
+    if (!password || password.length > 200) return null;
+    return password;
+}
+
+function isValidPreviewDataUrl(value) {
+    if (typeof value !== "string") return false;
+    if (value.length > 250000) return false;
+    if (
+        /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(
+            value,
+        )
+    ) {
+        return true;
+    }
+
+    if (/^css:[A-Za-z0-9+/=]*$/i.test(value) && value.length <= 8000) {
+        return true;
+    }
+
+    return false;
+}
+
+function sanitizeCssComment(value) {
+    return sanitizeBasicText(value, 60)
+        .replace(/\*\//g, "")
+        .replace(/\r?\n/g, " ");
+}
+
+function isValidCustomSkinCss(cssCode) {
+    if (typeof cssCode !== "string") return false;
+    if (cssCode.length === 0 || cssCode.length > 5000) return false;
+
+    const lowered = cssCode.replace(/\/\*[\s\S]*?\*\//g, "").toLowerCase();
+
+    if (!lowered.includes(".skin-preview")) return false;
+
+    const blockedPatterns = [
+        /javascript\s*:/i,
+        /expression\s*\(/i,
+        /url\s*\(/i,
+        /@import\b/i,
+        /@charset\b/i,
+        /@namespace\b/i,
+        /behavior\s*:/i,
+        /-moz-binding\s*:/i,
+        /<\/?script/i,
+    ];
+
+    return !blockedPatterns.some((pattern) => pattern.test(lowered));
 }
 
 function authenticateToken(req, res, next) {
@@ -434,7 +527,8 @@ const verifyAdmin = async (req, res, next) => {
 // --- ROUTES AUTH ---
 
 app.post("/api/register", authLimiter, async (req, res) => {
-    const { pseudo, password } = req.body;
+    const pseudo = normalizePseudo(req.body?.pseudo);
+    const password = normalizePassword(req.body?.password);
 
     // Vérif IP
     const ip = req.ip;
@@ -442,9 +536,10 @@ app.post("/api/register", authLimiter, async (req, res) => {
     if (banned) return res.json({ success: false, message: "IP Bannie." });
 
     if (!pseudo || !password)
-        return res.json({ success: false, message: "Champs manquants." });
-    if (pseudo.length > 12)
-        return res.json({ success: false, message: "Pseudo trop long." });
+        return res.json({
+            success: false,
+            message: "Pseudo ou mot de passe invalide.",
+        });
 
     const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, "i");
 
@@ -464,7 +559,14 @@ app.post("/api/register", authLimiter, async (req, res) => {
 });
 
 app.post("/api/login", authLimiter, async (req, res) => {
-    const { pseudo, password } = req.body;
+    const pseudo = normalizeLegacyPseudoForLogin(req.body?.pseudo);
+    const password = normalizeLegacyPasswordForLogin(req.body?.password);
+
+    if (!pseudo || !password)
+        return res.json({
+            success: false,
+            message: "Pseudo ou mot de passe invalide.",
+        });
 
     const ip = req.ip;
     const banned = await BannedIP.findOne({ ip });
@@ -479,8 +581,6 @@ app.post("/api/login", authLimiter, async (req, res) => {
             });
     }
 
-    if (!pseudo || !password)
-        return res.json({ success: false, message: "Champs manquants." });
     const safePseudoRegex = new RegExp(`^${escapeRegExp(pseudo)}$`, "i");
 
     try {
@@ -898,33 +998,31 @@ app.get("/api/coins", authenticateToken, async (req, res) => {
 
 // Soumettre un skin
 app.post("/api/skin-editor/submit", authenticateToken, async (req, res) => {
-    const { name, description, cssCode, previewData } = req.body;
+    const name = sanitizeBasicText(req.body?.name, 30);
+    const description = sanitizeBasicText(req.body?.description || "", 220);
+    const cssCode =
+        typeof req.body?.cssCode === "string" ? req.body.cssCode : "";
+    const previewData = req.body?.previewData;
+
     if (!name || !cssCode || !previewData)
         return res.json({ success: false, message: "Champs manquants." });
+    if (name.length > 30)
+        return res.json({ success: false, message: "Nom trop long." });
     if (cssCode.length > 5000)
         return res.json({
             success: false,
             message: "CSS trop long (max 5000 caractères).",
         });
-    if (name.length > 30)
-        return res.json({ success: false, message: "Nom trop long." });
-
-    // Vérif pas de JS dans le CSS
-    const forbidden = [
-        "javascript",
-        "expression(",
-        "url(",
-        "import",
-        "@import",
-        "behavior:",
-    ];
-    for (const f of forbidden) {
-        if (cssCode.toLowerCase().includes(f))
-            return res.json({
-                success: false,
-                message: "CSS non autorisé (contenu interdit).",
-            });
-    }
+    if (!isValidPreviewDataUrl(previewData))
+        return res.json({
+            success: false,
+            message: "Preview invalide.",
+        });
+    if (!isValidCustomSkinCss(cssCode))
+        return res.json({
+            success: false,
+            message: "CSS non autorisé (contenu interdit).",
+        });
 
     try {
         // Max 3 soumissions en attente par joueur
@@ -1053,7 +1151,8 @@ app.post(
     "/api/admin/skin-submissions/reject",
     verifyAdmin,
     async (req, res) => {
-        const { submissionId, reason } = req.body;
+        const { submissionId } = req.body;
+        const reason = sanitizeBasicText(req.body?.reason || "", 200);
         try {
             const sub = await SkinSubmission.findById(submissionId);
             if (!sub)
@@ -1096,8 +1195,11 @@ app.get("/api/skin-editor/approved-css", async (req, res) => {
         let css = "";
         approved.forEach((s) => {
             const classId = "skin-custom-" + s._id.toString().slice(-8);
+            if (!isValidCustomSkinCss(s.cssCode)) return;
             const wrapped = s.cssCode.replace(/\.skin-preview/g, "." + classId);
-            css += `/* ${s.name} by ${s.authorPseudo} */\n${wrapped}\n\n`;
+            const safeName = sanitizeCssComment(s.name);
+            const safeAuthor = sanitizeCssComment(s.authorPseudo);
+            css += `/* ${safeName} by ${safeAuthor} */\n${wrapped}\n\n`;
         });
         res.set("Content-Type", "text/css");
         res.send(css);
@@ -1594,9 +1696,16 @@ io.on("connection", async (socket) => {
         if (!roomName) return;
         const p = rooms[roomName].players[socket.id];
         if (!p) return;
-        const clean = String(msg).trim().slice(0, 100);
+
+        const now = Date.now();
+        if (chatCooldowns[socket.id] && now - chatCooldowns[socket.id] < 500)
+            return;
+        chatCooldowns[socket.id] = now;
+
+        const clean = sanitizeBasicText(msg, 100);
         if (!clean) return;
-        const entry = { pseudo: p.pseudo, msg: clean, ts: Date.now() };
+        const safePseudo = sanitizeBasicText(p.pseudo, 20) || "Joueur";
+        const entry = { pseudo: safePseudo, msg: clean, ts: Date.now() };
         chatHistory[roomName].push(entry);
         if (chatHistory[roomName].length > 100) chatHistory[roomName].shift();
         io.to(roomName).emit("chatMessage", entry);
@@ -1622,6 +1731,7 @@ io.on("connection", async (socket) => {
     socket.on("disconnect", async () => {
         await removePlayerFromGame(socket.id);
         delete uploadCooldowns[socket.id];
+        delete chatCooldowns[socket.id];
     });
 });
 
