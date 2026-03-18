@@ -21,6 +21,11 @@ const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
 const MAIL_FROM = process.env.MAIL_FROM;
+const SMTP_REQUIRE_TLS =
+    String(process.env.SMTP_REQUIRE_TLS || "").toLowerCase() === "true";
+const SMTP_FAMILY = Number(process.env.SMTP_FAMILY);
+const SMTP_VERIFY_ON_START =
+    String(process.env.SMTP_VERIFY_ON_START || "").toLowerCase() === "true";
 const SMTP_SECURE =
     String(process.env.SMTP_SECURE || "").toLowerCase() === "true" ||
     SMTP_PORT === 465;
@@ -34,10 +39,16 @@ const mailer = MAILER_ENABLED
           host: SMTP_HOST,
           port: SMTP_PORT,
           secure: SMTP_SECURE,
-          requireTLS: !SMTP_SECURE,
+          requireTLS: SMTP_REQUIRE_TLS,
           auth: {
               user: SMTP_USER,
               pass: SMTP_PASS,
+          },
+          ...(SMTP_FAMILY === 4 || SMTP_FAMILY === 6
+              ? { family: SMTP_FAMILY }
+              : {}),
+          tls: {
+              servername: SMTP_HOST,
           },
           connectionTimeout: 10_000,
           greetingTimeout: 10_000,
@@ -49,6 +60,36 @@ if (!MAILER_ENABLED) {
     console.warn(
         "⚠️ SMTP non configuré (HOST/PORT/USER/PASS/MAIL_FROM). Réinitialisation email désactivée.",
     );
+}
+
+if (MAILER_ENABLED && mailer && SMTP_VERIFY_ON_START) {
+    mailer
+        .verify()
+        .then(() => {
+            console.log("✅ SMTP OK (connexion de vérification réussie).");
+        })
+        .catch((err) => {
+            const code = err && err.code ? String(err.code) : "UNKNOWN";
+            const message = err && err.message ? String(err.message) : "";
+            console.warn(
+                `⚠️ SMTP verify failed: ${code}${message ? ` - ${message}` : ""}`,
+            );
+        });
+}
+
+function getSmtpErrorDetails(err) {
+    const code = err && err.code ? String(err.code) : "UNKNOWN";
+    const message = err && err.message ? String(err.message) : "";
+    const command = err && err.command ? String(err.command) : "";
+    const responseCode =
+        err && err.responseCode ? String(err.responseCode) : "";
+
+    return {
+        code,
+        message,
+        command,
+        responseCode,
+    };
 }
 
 async function sendResetEmail(toEmail, pseudo, token) {
@@ -1415,13 +1456,22 @@ app.post("/api/forgot-password", authLimiter, async (req, res) => {
         await sendResetEmail(user.email, user.pseudo, token);
         res.json({ success: true });
     } catch (e) {
-        const code = e && e.code ? String(e.code) : "UNKNOWN";
+        const { code, message, command, responseCode } = getSmtpErrorDetails(e);
         if (
             code === "ETIMEDOUT" ||
+            code === "ESOCKET" ||
             code === "ECONNECTION" ||
             code === "EAUTH"
         ) {
-            console.warn(`⚠️ SMTP reset-password error: ${code}`);
+            console.warn(
+                `⚠️ SMTP reset-password error: ${code}${message ? ` - ${message}` : ""}${command ? ` (command=${command})` : ""}${responseCode ? ` (responseCode=${responseCode})` : ""}`,
+            );
+
+            if (code === "ETIMEDOUT") {
+                console.warn(
+                    "ℹ️ Vérifie Render: host/port SMTP accessibles, port 587/465 autorisé, et essaye SMTP_FAMILY=4.",
+                );
+            }
         } else if (e && e.message === "MAILER_DISABLED") {
             console.warn("⚠️ SMTP non configuré pour reset-password.");
         } else {
