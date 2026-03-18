@@ -16,20 +16,54 @@ const rateLimit = require("express-rate-limit");
 
 const nodemailer = require("nodemailer");
 
-const mailer = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT) || 587,
-    secure: false,
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-});
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const MAIL_FROM = process.env.MAIL_FROM;
+const SMTP_SECURE =
+    String(process.env.SMTP_SECURE || "").toLowerCase() === "true" ||
+    SMTP_PORT === 465;
+
+const MAILER_ENABLED = Boolean(
+    SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS && MAIL_FROM,
+);
+
+const mailer = MAILER_ENABLED
+    ? nodemailer.createTransport({
+          host: SMTP_HOST,
+          port: SMTP_PORT,
+          secure: SMTP_SECURE,
+          requireTLS: !SMTP_SECURE,
+          auth: {
+              user: SMTP_USER,
+              pass: SMTP_PASS,
+          },
+          connectionTimeout: 10_000,
+          greetingTimeout: 10_000,
+          socketTimeout: 15_000,
+      })
+    : null;
+
+if (!MAILER_ENABLED) {
+    console.warn(
+        "⚠️ SMTP non configuré (HOST/PORT/USER/PASS/MAIL_FROM). Réinitialisation email désactivée.",
+    );
+}
 
 async function sendResetEmail(toEmail, pseudo, token) {
-    const resetUrl = `${process.env.SITE_URL || "http://localhost:2220"}/reset-password?token=${token}`;
+    if (!MAILER_ENABLED || !mailer) {
+        throw new Error("MAILER_DISABLED");
+    }
+
+    const baseUrl =
+        process.env.SITE_URL ||
+        process.env.RENDER_EXTERNAL_URL ||
+        "http://localhost:2220";
+    const resetUrl = `${baseUrl.replace(/\/$/, "")}/reset-password?token=${token}`;
+
     await mailer.sendMail({
-        from: `"Cube Tag" <${process.env.MAIL_FROM}>`,
+        from: `"Cube Tag" <${MAIL_FROM}>`,
         to: toEmail,
         subject: "🔑 Réinitialisation de ton mot de passe — Cube Tag",
         html: `
@@ -1381,7 +1415,18 @@ app.post("/api/forgot-password", authLimiter, async (req, res) => {
         await sendResetEmail(user.email, user.pseudo, token);
         res.json({ success: true });
     } catch (e) {
-        console.error(e);
+        const code = e && e.code ? String(e.code) : "UNKNOWN";
+        if (
+            code === "ETIMEDOUT" ||
+            code === "ECONNECTION" ||
+            code === "EAUTH"
+        ) {
+            console.warn(`⚠️ SMTP reset-password error: ${code}`);
+        } else if (e && e.message === "MAILER_DISABLED") {
+            console.warn("⚠️ SMTP non configuré pour reset-password.");
+        } else {
+            console.error(e);
+        }
         res.json({ success: true }); // Toujours OK côté client
     }
 });
