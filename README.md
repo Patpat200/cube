@@ -39,6 +39,8 @@ SMTP_PORT=587
 SMTP_USER=votre_identifiant
 SMTP_PASS=votre_mot_de_passe_ou_app_password
 MAIL_FROM=no-reply@votredomaine.com
+# Option recommandé sur Render gratuit: API Brevo (HTTPS/443)
+BREVO_API_KEY=xkeysib-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 # true seulement si port 465 (SSL implicite)
 SMTP_SECURE=false
 # true seulement si votre fournisseur impose STARTTLS obligatoire
@@ -47,9 +49,13 @@ SMTP_REQUIRE_TLS=false
 SMTP_FAMILY=4
 # active un test SMTP au démarrage (logs)
 SMTP_VERIFY_ON_START=true
+# URL publique de l'app (important pour le lien de reset)
+SITE_URL=https://votre-service.onrender.com
 # Port doublement optionnel
 PORT=2220
 ```
+
+Sur Render gratuit, si SMTP renvoie `ETIMEDOUT`, configure `BREVO_API_KEY` : le serveur bascule automatiquement vers l'API Brevo (HTTPS) pour l'envoi des emails de reset.
 
 **Installation**
 

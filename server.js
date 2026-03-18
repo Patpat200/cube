@@ -21,6 +21,8 @@ const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
 const MAIL_FROM = process.env.MAIL_FROM;
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 const SMTP_REQUIRE_TLS =
     String(process.env.SMTP_REQUIRE_TLS || "").toLowerCase() === "true";
 const SMTP_FAMILY = Number(process.env.SMTP_FAMILY);
@@ -30,11 +32,12 @@ const SMTP_SECURE =
     String(process.env.SMTP_SECURE || "").toLowerCase() === "true" ||
     SMTP_PORT === 465;
 
-const MAILER_ENABLED = Boolean(
+const SMTP_MAILER_ENABLED = Boolean(
     SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS && MAIL_FROM,
 );
+const BREVO_API_ENABLED = Boolean(BREVO_API_KEY && MAIL_FROM);
 
-const mailer = MAILER_ENABLED
+const mailer = SMTP_MAILER_ENABLED
     ? nodemailer.createTransport({
           host: SMTP_HOST,
           port: SMTP_PORT,
@@ -56,13 +59,13 @@ const mailer = MAILER_ENABLED
       })
     : null;
 
-if (!MAILER_ENABLED) {
+if (!SMTP_MAILER_ENABLED && !BREVO_API_ENABLED) {
     console.warn(
-        "⚠️ SMTP non configuré (HOST/PORT/USER/PASS/MAIL_FROM). Réinitialisation email désactivée.",
+        "⚠️ Email non configuré (SMTP ou BREVO_API_KEY manquant). Réinitialisation email désactivée.",
     );
 }
 
-if (MAILER_ENABLED && mailer && SMTP_VERIFY_ON_START) {
+if (SMTP_MAILER_ENABLED && mailer && SMTP_VERIFY_ON_START) {
     mailer
         .verify()
         .then(() => {
@@ -92,22 +95,17 @@ function getSmtpErrorDetails(err) {
     };
 }
 
-async function sendResetEmail(toEmail, pseudo, token) {
-    if (!MAILER_ENABLED || !mailer) {
-        throw new Error("MAILER_DISABLED");
-    }
-
-    const baseUrl =
-        process.env.SITE_URL ||
-        process.env.RENDER_EXTERNAL_URL ||
-        "http://localhost:2220";
-    const resetUrl = `${baseUrl.replace(/\/$/, "")}/reset-password?token=${token}`;
-
-    await mailer.sendMail({
-        from: `"Cube Tag" <${MAIL_FROM}>`,
-        to: toEmail,
-        subject: "🔑 Réinitialisation de ton mot de passe — Cube Tag",
-        html: `
+async function sendResetEmailWithBrevoApi(toEmail, pseudo, resetUrl) {
+    const response = await axios.post(
+        BREVO_API_URL,
+        {
+            sender: {
+                email: MAIL_FROM,
+                name: "Cube Tag",
+            },
+            to: [{ email: toEmail, name: pseudo || undefined }],
+            subject: "🔑 Réinitialisation de ton mot de passe — Cube Tag",
+            htmlContent: `
             <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;background:#111;color:#fff;padding:30px;border-radius:12px;">
                 <h2 style="color:#00d4ff;">Cube Tag</h2>
                 <p>Bonjour <strong>${pseudo}</strong>,</p>
@@ -118,7 +116,78 @@ async function sendResetEmail(toEmail, pseudo, token) {
                 <p style="color:#888;font-size:12px;">Ce lien expire dans 1 heure. Si tu n'as pas fait cette demande, ignore cet email.</p>
             </div>
         `,
-    });
+        },
+        {
+            headers: {
+                "api-key": BREVO_API_KEY,
+                "content-type": "application/json",
+                accept: "application/json",
+            },
+            timeout: 15_000,
+        },
+    );
+
+    return response.data;
+}
+
+async function sendResetEmail(toEmail, pseudo, token) {
+    if (!SMTP_MAILER_ENABLED && !BREVO_API_ENABLED) {
+        throw new Error("MAILER_DISABLED");
+    }
+
+    const baseUrl =
+        process.env.SITE_URL ||
+        process.env.RENDER_EXTERNAL_URL ||
+        "http://localhost:2220";
+    const resetUrl = `${baseUrl.replace(/\/$/, "")}/reset-password?token=${token}`;
+
+    if (SMTP_MAILER_ENABLED && mailer) {
+        try {
+            await mailer.sendMail({
+                from: `"Cube Tag" <${MAIL_FROM}>`,
+                to: toEmail,
+                subject: "🔑 Réinitialisation de ton mot de passe — Cube Tag",
+                html: `
+            <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;background:#111;color:#fff;padding:30px;border-radius:12px;">
+                <h2 style="color:#00d4ff;">Cube Tag</h2>
+                <p>Bonjour <strong>${pseudo}</strong>,</p>
+                <p>Tu as demandé une réinitialisation de mot de passe.</p>
+                <a href="${resetUrl}" style="display:inline-block;margin:20px 0;padding:12px 24px;background:#00d4ff;color:#000;border-radius:8px;text-decoration:none;font-weight:bold;">
+                    Réinitialiser mon mot de passe
+                </a>
+                <p style="color:#888;font-size:12px;">Ce lien expire dans 1 heure. Si tu n'as pas fait cette demande, ignore cet email.</p>
+            </div>
+        `,
+            });
+            return;
+        } catch (smtpErr) {
+            if (!BREVO_API_ENABLED) throw smtpErr;
+            const { code } = getSmtpErrorDetails(smtpErr);
+            console.warn(
+                `⚠️ SMTP indisponible (${code}), tentative via API Brevo HTTPS...`,
+            );
+        }
+    }
+
+    if (BREVO_API_ENABLED) {
+        try {
+            await sendResetEmailWithBrevoApi(toEmail, pseudo, resetUrl);
+            return;
+        } catch (apiErr) {
+            const status = apiErr && apiErr.response && apiErr.response.status;
+            const statusText =
+                apiErr && apiErr.response && apiErr.response.statusText;
+            const details =
+                apiErr && apiErr.response && apiErr.response.data
+                    ? JSON.stringify(apiErr.response.data)
+                    : "";
+            const error = new Error(
+                `BREVO_API_FAILED${status ? ` (${status}${statusText ? ` ${statusText}` : ""})` : ""}${details ? ` - ${details}` : ""}`,
+            );
+            error.code = status ? `BREVO_HTTP_${status}` : "BREVO_HTTP_UNKNOWN";
+            throw error;
+        }
+    }
 }
 
 const {
@@ -1472,6 +1541,10 @@ app.post("/api/forgot-password", authLimiter, async (req, res) => {
                     "ℹ️ Vérifie Render: host/port SMTP accessibles, port 587/465 autorisé, et essaye SMTP_FAMILY=4.",
                 );
             }
+        } else if (code.startsWith("BREVO_HTTP_")) {
+            console.warn(
+                `⚠️ Brevo API reset-password error: ${code} - ${message}`,
+            );
         } else if (e && e.message === "MAILER_DISABLED") {
             console.warn("⚠️ SMTP non configuré pour reset-password.");
         } else {
