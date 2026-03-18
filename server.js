@@ -14,6 +14,38 @@ const jwt = require("jsonwebtoken");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
+const nodemailer = require("nodemailer");
+
+const mailer = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: false,
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
+
+async function sendResetEmail(toEmail, pseudo, token) {
+    const resetUrl = `${process.env.SITE_URL || "http://localhost:2220"}/reset-password?token=${token}`;
+    await mailer.sendMail({
+        from: `"Cube Tag" <${process.env.MAIL_FROM}>`,
+        to: toEmail,
+        subject: "🔑 Réinitialisation de ton mot de passe — Cube Tag",
+        html: `
+            <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;background:#111;color:#fff;padding:30px;border-radius:12px;">
+                <h2 style="color:#00d4ff;">Cube Tag</h2>
+                <p>Bonjour <strong>${pseudo}</strong>,</p>
+                <p>Tu as demandé une réinitialisation de mot de passe.</p>
+                <a href="${resetUrl}" style="display:inline-block;margin:20px 0;padding:12px 24px;background:#00d4ff;color:#000;border-radius:8px;text-decoration:none;font-weight:bold;">
+                    Réinitialiser mon mot de passe
+                </a>
+                <p style="color:#888;font-size:12px;">Ce lien expire dans 1 heure. Si tu n'as pas fait cette demande, ignore cet email.</p>
+            </div>
+        `,
+    });
+}
+
 const {
     ACHIEVEMENTS,
     SECRET_CODES,
@@ -64,6 +96,14 @@ mongoose
 // 1. UTILISATEUR
 const UserSchema = new mongoose.Schema({
     pseudo: { type: String, unique: true, required: true },
+    email: {
+        type: String,
+        default: null,
+        sparse: true,
+        unique: true,
+        lowercase: true,
+        trim: true,
+    },
     password: { type: String, required: true },
     isAdmin: { type: Boolean, default: false },
     isBanned: { type: Boolean, default: false },
@@ -82,6 +122,13 @@ const UserSchema = new mongoose.Schema({
     coins: { type: Number, default: 0 },
 });
 const User = mongoose.model("User", UserSchema);
+
+const ResetTokenSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    token: { type: String, required: true },
+    expiresAt: { type: Date, required: true },
+});
+const ResetToken = mongoose.model("ResetToken", ResetTokenSchema);
 
 // 2. LOGS ADMIN
 const LogSchema = new mongoose.Schema({
@@ -443,6 +490,40 @@ function normalizeLegacyPasswordForLogin(value) {
     const password = value.trim();
     if (!password || password.length > 200) return null;
     return password;
+}
+
+function isValidEmail(value) {
+    if (typeof value !== "string") return false;
+    const email = value.trim().toLowerCase();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isSafeCurrentSkinValue(value) {
+    if (typeof value !== "string") return false;
+    const skin = value.trim();
+    if (!skin || skin.length > 220) return false;
+
+    if (/^#[0-9a-f]{3,8}$/i.test(skin)) return true;
+    if (/^skin-[a-z0-9_-]{2,80}$/i.test(skin)) return true;
+    if (/^skin-custom-[a-f0-9]{8}$/i.test(skin)) return true;
+    if (/^https?:\/\/[^\s]+$/i.test(skin)) return true;
+    if (/^\/[^\s]*$/i.test(skin)) return true;
+    if (
+        /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(
+            skin,
+        )
+    )
+        return true;
+
+    return false;
+}
+
+function isSafeBackgroundDataUrl(value) {
+    if (typeof value !== "string") return false;
+    if (value.length === 0 || value.length > 2_000_000) return false;
+    return /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(
+        value,
+    );
 }
 
 function isValidPreviewDataUrl(value) {
@@ -817,18 +898,31 @@ app.post("/api/admin/action", verifyAdmin, async (req, res) => {
                 `État: ${maintenanceMode}`,
             );
         } else if (type === "BROADCAST") {
+            const safeMessage = sanitizeBasicText(payload?.message || "", 200);
+            if (!safeMessage)
+                return res.json({ success: false, message: "Message vide." });
             io.emit("serverMessage", {
-                text: `📢 ADMIN : ${payload.message}`,
+                text: `📢 ADMIN : ${safeMessage}`,
                 color: "red",
             });
-            await addLog("BROADCAST", req.user.pseudo, "ALL", payload.message);
+            await addLog("BROADCAST", req.user.pseudo, "ALL", safeMessage);
         } else if (type === "WHISPER") {
+            const safeMessage = sanitizeBasicText(payload?.message || "", 200);
+            const targetPseudo = sanitizeBasicText(
+                payload?.targetPseudo || "",
+                30,
+            );
+            if (!safeMessage || !targetPseudo)
+                return res.json({
+                    success: false,
+                    message: "Données invalides.",
+                });
             const sockets = await io.fetchSockets();
             let found = false;
             for (const s of sockets) {
-                if (s.user && s.user.pseudo === payload.targetPseudo) {
+                if (s.user && s.user.pseudo === targetPseudo) {
                     s.emit("serverMessage", {
-                        text: `💬 MP Admin : ${payload.message}`,
+                        text: `💬 MP Admin : ${safeMessage}`,
                         color: "purple",
                     });
                     found = true;
@@ -839,36 +933,38 @@ app.post("/api/admin/action", verifyAdmin, async (req, res) => {
                     success: false,
                     message: "Joueur introuvable.",
                 });
-            await addLog(
-                "WHISPER",
-                req.user.pseudo,
-                payload.targetPseudo,
-                payload.message,
-            );
+            await addLog("WHISPER", req.user.pseudo, targetPseudo, safeMessage);
         } else if (type === "KICK") {
+            const targetPseudo = sanitizeBasicText(
+                payload?.targetPseudo || "",
+                30,
+            );
+            if (!targetPseudo)
+                return res.json({ success: false, message: "Cible invalide." });
             const sockets = await io.fetchSockets();
             for (const s of sockets) {
                 if (
-                    (s.user && s.user.pseudo === payload.targetPseudo) ||
+                    (s.user && s.user.pseudo === targetPseudo) ||
                     (!s.user &&
-                        payload.targetPseudo.startsWith("Cube") &&
+                        targetPseudo.startsWith("Cube") &&
                         players[s.id])
                 ) {
                     s.emit("forceLobby", "kick");
                     s.disconnect(true);
                 }
             }
-            await addLog(
-                "KICK",
-                req.user.pseudo,
-                payload.targetPseudo,
-                "Expulsé",
-            );
+            await addLog("KICK", req.user.pseudo, targetPseudo, "Expulsé");
         } else if (type === "BAN_IP") {
+            const targetPseudo = sanitizeBasicText(
+                payload?.targetPseudo || "",
+                30,
+            );
+            if (!targetPseudo)
+                return res.json({ success: false, message: "Cible invalide." });
             const sockets = await io.fetchSockets();
             let targetIp = null;
             for (const s of sockets) {
-                if (s.user && s.user.pseudo === payload.targetPseudo) {
+                if (s.user && s.user.pseudo === targetPseudo) {
                     targetIp = s.handshake.address;
                     if (s.handshake.headers["x-forwarded-for"])
                         targetIp =
@@ -888,7 +984,7 @@ app.post("/api/admin/action", verifyAdmin, async (req, res) => {
                 await addLog(
                     "BAN_IP",
                     req.user.pseudo,
-                    payload.targetPseudo,
+                    targetPseudo,
                     `IP: ${targetIp}`,
                 );
             } else
@@ -1230,6 +1326,105 @@ app.get("/api/skin-editor/community-skins", async (req, res) => {
     }
 });
 
+const crypto = require("crypto");
+
+// Ajouter email au compte
+app.post("/api/set-email", authenticateToken, async (req, res) => {
+    const email = sanitizeBasicText(req.body?.email || "", 100).toLowerCase();
+    if (!email || !isValidEmail(email))
+        return res.json({ success: false, message: "Email invalide." });
+    try {
+        const existingUser = await User.findOne({
+            email,
+            _id: { $ne: req.user.id },
+        }).select("_id");
+
+        if (existingUser)
+            return res.json({
+                success: false,
+                message: "Cet email est déjà utilisé par un autre compte.",
+            });
+
+        await User.findByIdAndUpdate(req.user.id, { $set: { email } });
+        res.json({ success: true });
+    } catch (e) {
+        if (e && e.code === 11000)
+            return res.json({
+                success: false,
+                message: "Cet email est déjà utilisé par un autre compte.",
+            });
+        res.status(500).json({ success: false });
+    }
+});
+
+app.post("/api/forgot-password", authLimiter, async (req, res) => {
+    const pseudo = sanitizeBasicText(req.body?.pseudo || "", 30);
+    if (!pseudo)
+        return res.json({ success: false, message: "Pseudo manquant." });
+    try {
+        const user = await User.findOne({
+            pseudo: new RegExp(`^${escapeRegExp(pseudo)}$`, "i"),
+        });
+        // Toujours répondre OK pour ne pas révéler si le compte existe
+        if (!user || !user.email) return res.json({ success: true });
+
+        // Supprimer anciens tokens
+        await ResetToken.deleteMany({ userId: user._id });
+
+        const token = crypto.randomBytes(32).toString("hex");
+        await ResetToken.create({
+            userId: user._id,
+            token,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1h
+        });
+
+        await sendResetEmail(user.email, user.pseudo, token);
+        res.json({ success: true });
+    } catch (e) {
+        console.error(e);
+        res.json({ success: true }); // Toujours OK côté client
+    }
+});
+
+// Reset du mot de passe
+app.post("/api/reset-password", authLimiter, async (req, res) => {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword)
+        return res.json({ success: false, message: "Données manquantes." });
+    if (
+        typeof newPassword !== "string" ||
+        newPassword.length < 8 ||
+        newPassword.length > 72
+    )
+        return res.json({
+            success: false,
+            message: "Mot de passe invalide (8-72 caractères).",
+        });
+    try {
+        const resetToken = await ResetToken.findOne({ token });
+        if (!resetToken || resetToken.expiresAt < new Date())
+            return res.json({
+                success: false,
+                message: "Lien invalide ou expiré.",
+            });
+
+        const hashed = await bcrypt.hash(newPassword, 10);
+        await User.findByIdAndUpdate(resetToken.userId, {
+            $set: { password: hashed },
+        });
+        await ResetToken.deleteOne({ _id: resetToken._id });
+
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// Page de reset (sert le HTML)
+app.get("/reset-password", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "reset-password.html"));
+});
+
 // --- SOCKET.IO ---
 async function removePlayerFromGame(socketId) {
     const roomName = getRoomOfSocket(socketId);
@@ -1424,11 +1619,24 @@ io.on("connection", async (socket) => {
         const room = rooms[roomName];
         const p = room.players[socket.id];
         if (!p) return;
-        const dx = movementData.x - p.x,
-            dy = movementData.y - p.y;
+
+        if (
+            !movementData ||
+            typeof movementData.x !== "number" ||
+            typeof movementData.y !== "number" ||
+            !Number.isFinite(movementData.x) ||
+            !Number.isFinite(movementData.y)
+        )
+            return;
+
+        const nextX = Math.max(0, Math.min(1200, movementData.x));
+        const nextY = Math.max(0, Math.min(650, movementData.y));
+
+        const dx = nextX - p.x,
+            dy = nextY - p.y;
         p.pendingDistance += Math.sqrt(dx * dx + dy * dy);
-        p.x = movementData.x;
-        p.y = movementData.y;
+        p.x = nextX;
+        p.y = nextY;
         if (socket.id === room.wolfId) room.lastWolfMoveTime = Date.now();
         socket.to(roomName).emit("playerMoved", {
             playerId: socket.id,
@@ -1587,12 +1795,22 @@ io.on("connection", async (socket) => {
             socket.emit("uploadError", "Analyse d'image désactivée.");
             return;
         }
+
+        if (!isSafeBackgroundDataUrl(imageData)) {
+            socket.emit("uploadError", "Image invalide ou trop lourde.");
+            return;
+        }
+
         try {
             const base64Data = imageData.replace(
                 /^data:image\/\w+;base64,/,
                 "",
             );
             let imageBuffer = Buffer.from(base64Data, "base64");
+            if (imageBuffer.length > 1_500_000) {
+                socket.emit("uploadError", "Image trop lourde (max ~1.5MB).");
+                return;
+            }
             const isGif = imageBuffer.toString("ascii", 0, 3) === "GIF";
             if (isGif) {
                 const metadata = await sharp(imageBuffer).metadata();
@@ -1609,6 +1827,9 @@ io.on("connection", async (socket) => {
             form.append("api_secret", API_SECRET);
             const response = await axios.post(API_URL, form, {
                 headers: form.getHeaders(),
+                timeout: 10_000,
+                maxBodyLength: 2 * 1024 * 1024,
+                maxContentLength: 2 * 1024 * 1024,
             });
             if (response.data.status === "success") {
                 if (
@@ -1650,20 +1871,30 @@ io.on("connection", async (socket) => {
     });
 
     socket.on("saveSkin", async (data) => {
-        if (socket.user && socket.user.pseudo && data.color)
+        const color = typeof data?.color === "string" ? data.color.trim() : "";
+        if (
+            socket.user &&
+            socket.user.pseudo &&
+            color &&
+            isSafeCurrentSkinValue(color)
+        )
             await User.updateOne(
                 { pseudo: socket.user.pseudo },
-                { $set: { currentSkin: data.color } },
+                { $set: { currentSkin: color } },
             );
     });
     socket.on("redeemCode", async (data) => {
-        const { code } = data;
+        const codeRaw = typeof data?.code === "string" ? data.code : "";
         if (!socket.user || !socket.user.pseudo) {
             socket.emit("codeError", "Connecte-toi d'abord !");
             return;
         }
         const pseudo = socket.user.pseudo;
-        const cleanCode = code.trim().toUpperCase();
+        const cleanCode = codeRaw.trim().toUpperCase();
+        if (!/^[A-Z0-9_-]{3,40}$/.test(cleanCode)) {
+            socket.emit("codeError", "Code invalide.");
+            return;
+        }
         if (SECRET_CODES[cleanCode]) {
             const reward = SECRET_CODES[cleanCode];
             const user = await User.findOne({ pseudo });

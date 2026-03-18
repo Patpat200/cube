@@ -188,8 +188,14 @@
                 font-weight: bold;
                 font-size: 16px;
                 cursor: pointer;
-                transition: transform 0.1s;
+                transition:
+                    transform 0.12s,
+                    filter 0.2s;
                 color: white;
+                font-family: "Exo 2", sans-serif;
+            }
+            .lobby-btn:hover {
+                filter: brightness(1.08);
             }
             .lobby-btn:active {
                 transform: scale(0.98);
@@ -197,6 +203,7 @@
             .btn-play {
                 background: #4caf50;
                 font-size: 20px;
+                letter-spacing: 1px;
             }
             .btn-stats {
                 background: #9c27b0;
@@ -346,25 +353,120 @@
                 margin-top: 10px;
             }
             .room-btn {
-                background: linear-gradient(135deg, #1a1a2e, #16213e);
-                color: #00d4ff;
-                border: 1px solid #00d4ff44;
+                background: #2196f3;
+                color: white;
+                border: 1px solid #1e88e5;
                 padding: 12px 20px;
                 border-radius: 8px;
                 cursor: pointer;
-                font-family: "Orbitron", sans-serif;
-                font-size: 13px;
+                font-family: "Exo 2", sans-serif;
+                font-size: 14px;
+                font-weight: 700;
                 transition: all 0.2s;
             }
             .room-btn:hover {
-                background: linear-gradient(135deg, #0073e6, #005bb5);
-                border-color: #00d4ff;
-                box-shadow: 0 0 15px #00d4ff55;
+                background: #1e88e5;
             }
             .room-btn .room-count {
                 font-size: 11px;
                 opacity: 0.7;
                 margin-left: 8px;
+            }
+
+            #play-panel,
+            #settings-panel {
+                display: none;
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 10px;
+                width: 640px;
+                max-width: 95vw;
+                max-height: 86vh;
+                overflow: hidden;
+                box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+                font-family: "Exo 2", sans-serif;
+                flex-direction: column;
+            }
+            #play-panel.active,
+            #settings-panel.active {
+                display: flex;
+            }
+            .menu-panel-header {
+                background: #f8f9fb;
+                padding: 16px 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid #ddd;
+            }
+            .menu-panel-header h2 {
+                margin: 0;
+                color: #333;
+                font-family: "Exo 2", sans-serif;
+                font-size: 20px;
+                font-weight: 700;
+            }
+            .menu-close-btn {
+                background: #eee;
+                border: 1px solid #ccc;
+                color: #333;
+                padding: 6px 14px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-family: "Exo 2", sans-serif;
+            }
+            .menu-close-btn:hover {
+                background: #e3e3e3;
+            }
+            .menu-panel-body {
+                padding: 18px;
+                overflow-y: auto;
+            }
+            .play-subtitle {
+                color: #555;
+                font-size: 13px;
+                margin-bottom: 12px;
+            }
+            .settings-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .settings-card {
+                background: #f9f9f9;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 14px;
+            }
+            .settings-card-title {
+                color: #333;
+                font-size: 13px;
+                letter-spacing: 1px;
+                margin-bottom: 10px;
+                font-weight: 700;
+            }
+            .settings-line {
+                color: #444;
+                font-size: 13px;
+                margin-bottom: 6px;
+            }
+            .settings-line strong {
+                color: #222;
+            }
+            .settings-input {
+                width: 100%;
+                padding: 10px 12px;
+                border-radius: 6px;
+                border: 1px solid #ccc;
+                background: white;
+                color: #222;
+                box-sizing: border-box;
+                font-family: "Exo 2", sans-serif;
+                font-size: 13px;
+                margin-bottom: 10px;
+            }
+            .settings-input:focus {
+                outline: none;
+                border-color: #00d4ff;
             }
 
             /* MINI-MAP */
@@ -691,16 +793,14 @@
             /* === BOUTIQUE === */
             #shop-panel {
                 display: none;
-                background: rgba(10, 10, 20, 0.98);
+                background: rgba(255, 255, 255, 0.95);
                 padding: 0;
-                border-radius: 16px;
+                border-radius: 10px;
                 width: 700px;
                 max-width: 95vw;
                 max-height: 85vh;
                 overflow: hidden;
-                box-shadow:
-                    0 0 60px rgba(0, 212, 255, 0.3),
-                    0 0 0 1px rgba(0, 212, 255, 0.2);
+                box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
                 font-family: "Exo 2", sans-serif;
                 flex-direction: column;
             }
@@ -708,22 +808,22 @@
                 display: flex;
             }
             .shop-header {
-                background: linear-gradient(135deg, #0a0a2e, #16213e);
+                background: #f8f9fb;
                 padding: 20px 25px;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+                border-bottom: 1px solid #ddd;
             }
             .shop-header h2 {
                 margin: 0;
-                color: #00d4ff;
-                font-family: "Orbitron", sans-serif;
-                font-size: 18px;
-                letter-spacing: 2px;
+                color: #333;
+                font-family: "Exo 2", sans-serif;
+                font-size: 20px;
+                font-weight: 700;
             }
             #shop-coins-display {
-                color: #ffd700;
+                color: #333;
                 font-weight: 700;
                 font-size: 16px;
             }
@@ -731,14 +831,14 @@
                 display: flex;
                 gap: 8px;
                 padding: 12px 20px;
-                background: rgba(0, 0, 0, 0.3);
+                background: #f3f4f6;
                 flex-wrap: wrap;
-                border-bottom: 1px solid #ffffff11;
+                border-bottom: 1px solid #ddd;
             }
             .shop-filter-btn {
-                background: transparent;
-                border: 1px solid #ffffff22;
-                color: #aaa;
+                background: white;
+                border: 1px solid #ccc;
+                color: #555;
                 padding: 5px 14px;
                 border-radius: 20px;
                 cursor: pointer;
@@ -748,9 +848,9 @@
             }
             .shop-filter-btn:hover,
             .shop-filter-btn.active {
-                background: #00d4ff22;
-                border-color: #00d4ff;
-                color: #00d4ff;
+                background: #2196f3;
+                border-color: #1e88e5;
+                color: white;
             }
             .shop-grid {
                 display: grid;
@@ -761,9 +861,9 @@
                 flex: 1;
             }
             .shop-item {
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
+                background: #f9f9f9;
+                border: 1px solid #ddd;
+                border-radius: 10px;
                 padding: 12px;
                 padding-top: 28px;
                 text-align: center;
@@ -773,13 +873,13 @@
                 overflow: visible;
             }
             .shop-item:hover {
-                border-color: rgba(0, 212, 255, 0.5);
-                background: rgba(0, 212, 255, 0.08);
+                border-color: #2196f3;
+                background: #eef6ff;
                 transform: translateY(-2px);
             }
             .shop-item.owned {
-                border-color: #00ff8844;
-                background: rgba(0, 255, 136, 0.06);
+                border-color: #4caf50;
+                background: #e8f5e9;
                 cursor: default;
             }
             .shop-item.owned:hover {
@@ -790,19 +890,19 @@
                 height: 60px;
                 border-radius: 8px;
                 margin: 0 auto 10px;
-                border: 2px solid rgba(255, 255, 255, 0.2);
+                border: 2px solid #ccc;
                 display: flex;
                 align-items: center;
                 justify-content: center;
             }
             .shop-item .skin-name {
-                color: white;
+                color: #222;
                 font-size: 13px;
                 font-weight: 600;
                 margin-bottom: 4px;
             }
             .shop-item .skin-desc {
-                color: #888;
+                color: #666;
                 font-size: 11px;
                 margin-bottom: 8px;
             }
@@ -817,7 +917,7 @@
                 color: #ff4444;
             }
             .shop-item .owned-badge {
-                color: #00ff88;
+                color: #2e7d32;
                 font-size: 12px;
             }
             .tier-badge {
@@ -858,14 +958,14 @@
                 color: #00ff88;
             }
             .shop-item.community-item {
-                border-color: #00ff8822;
+                border-color: #9ad9b1;
             }
             .shop-item.community-item:hover {
-                border-color: #00ff8866;
-                background: rgba(0, 255, 136, 0.06);
+                border-color: #4caf50;
+                background: #eefaf1;
             }
             .community-author {
-                color: #00ff88;
+                color: #2e7d32;
                 font-size: 10px;
                 margin-bottom: 4px;
             }
@@ -912,13 +1012,13 @@
             /* === ÉDITEUR DE SKIN === */
             #skin-editor-panel {
                 display: none;
-                background: rgba(10, 10, 20, 0.98);
-                border-radius: 16px;
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 10px;
                 width: 820px;
                 max-width: 96vw;
                 max-height: 90vh;
                 overflow: hidden;
-                box-shadow: 0 0 60px rgba(0, 212, 255, 0.2);
+                box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
                 font-family: "Exo 2", sans-serif;
                 flex-direction: column;
             }
@@ -926,19 +1026,19 @@
                 display: flex;
             }
             .editor-header {
-                background: linear-gradient(135deg, #0a0a2e, #16213e);
+                background: #f8f9fb;
                 padding: 18px 24px;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                border-bottom: 1px solid #00d4ff33;
+                border-bottom: 1px solid #ddd;
             }
             .editor-header h2 {
                 margin: 0;
-                color: #00d4ff;
-                font-family: "Orbitron", sans-serif;
-                font-size: 16px;
-                letter-spacing: 2px;
+                color: #333;
+                font-family: "Exo 2", sans-serif;
+                font-size: 20px;
+                font-weight: 700;
             }
             .editor-body {
                 display: grid;
@@ -950,18 +1050,18 @@
             .editor-left {
                 padding: 20px;
                 overflow-y: auto;
-                border-right: 1px solid #ffffff11;
+                border-right: 1px solid #ddd;
             }
             .editor-right {
                 padding: 20px;
-                background: rgba(0, 0, 0, 0.3);
+                background: #f6f7f9;
                 display: flex;
                 flex-direction: column;
                 gap: 14px;
                 overflow-y: auto;
             }
             .editor-label {
-                color: #aaa;
+                color: #555;
                 font-size: 12px;
                 margin-bottom: 6px;
                 display: block;
@@ -969,9 +1069,9 @@
             }
             .editor-input {
                 width: 100%;
-                background: rgba(255, 255, 255, 0.06);
-                border: 1px solid #ffffff22;
-                color: white;
+                background: white;
+                border: 1px solid #ccc;
+                color: #222;
                 padding: 8px 12px;
                 border-radius: 8px;
                 font-family: "Exo 2", sans-serif;
@@ -981,14 +1081,14 @@
                 transition: border-color 0.2s;
             }
             .editor-input:focus {
-                border-color: #00d4ff;
+                border-color: #2196f3;
             }
             #css-editor {
                 width: 100%;
                 height: 280px;
-                background: #0d1117;
-                border: 1px solid #30363d;
-                color: #e6edf3;
+                background: white;
+                border: 1px solid #ccc;
+                color: #222;
                 padding: 12px;
                 border-radius: 8px;
                 font-family: "Courier New", monospace;
@@ -999,13 +1099,13 @@
                 line-height: 1.6;
             }
             #css-editor:focus {
-                border-color: #00d4ff;
+                border-color: #2196f3;
             }
             .skin-live-preview {
                 width: 80px;
                 height: 80px;
                 border-radius: 10px;
-                border: 2px solid #ffffff33;
+                border: 2px solid #ccc;
                 margin: 0 auto;
                 transition: all 0.3s;
                 position: relative;
@@ -1013,7 +1113,7 @@
             }
             .preview-label {
                 text-align: center;
-                color: #888;
+                color: #666;
                 font-size: 11px;
                 margin-top: 6px;
             }
@@ -1032,22 +1132,22 @@
                 transform: translateY(-1px);
             }
             .btn-preview {
-                background: #1a3a6e;
-                color: #7bb8ff;
+                background: #9e9e9e;
+                color: white;
             }
             .btn-submit {
-                background: linear-gradient(135deg, #00d4ff, #0073e6);
+                background: #2196f3;
                 color: white;
             }
             .btn-reset {
-                background: #333;
-                color: #aaa;
+                background: #e0e0e0;
+                color: #333;
             }
 
             /* Mes soumissions */
             .submission-item {
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid #ffffff11;
+                background: #f9f9f9;
+                border: 1px solid #ddd;
                 border-radius: 10px;
                 padding: 12px;
                 margin-bottom: 8px;
@@ -1059,7 +1159,7 @@
                 margin-bottom: 6px;
             }
             .submission-item .s-name {
-                color: white;
+                color: #222;
                 font-weight: 600;
                 font-size: 14px;
             }
@@ -1083,9 +1183,9 @@
                 margin-bottom: 16px;
             }
             .editor-tab {
-                background: transparent;
-                border: 1px solid #ffffff22;
-                color: #aaa;
+                background: white;
+                border: 1px solid #ccc;
+                color: #555;
                 padding: 6px 16px;
                 border-radius: 8px;
                 cursor: pointer;
@@ -1094,9 +1194,9 @@
                 transition: all 0.2s;
             }
             .editor-tab.active {
-                background: #00d4ff22;
-                border-color: #00d4ff;
-                color: #00d4ff;
+                background: #2196f3;
+                border-color: #1e88e5;
+                color: white;
             }
 
             /* Templates CSS */
@@ -1107,9 +1207,9 @@
                 margin-top: 8px;
             }
             .template-btn {
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid #ffffff22;
-                color: #ccc;
+                background: white;
+                border: 1px solid #ccc;
+                color: #555;
                 padding: 8px;
                 border-radius: 8px;
                 cursor: pointer;
@@ -1119,8 +1219,8 @@
                 text-align: center;
             }
             .template-btn:hover {
-                border-color: #00d4ff55;
-                background: rgba(0, 212, 255, 0.08);
+                border-color: #2196f3;
+                background: #eef6ff;
             }
 
             /* ADMIN skins panel */
@@ -1301,6 +1401,84 @@
                     </button>
                 </div>
 
+                <div id="login-extra">
+                    <div style="margin-top: 8px">
+                        <button
+                            onclick="showForgotPassword()"
+                            style="
+                                background: none;
+                                border: none;
+                                color: #2196f3;
+                                cursor: pointer;
+                                font-size: 13px;
+                                text-decoration: underline;
+                            "
+                        >
+                            Mot de passe oublié ?
+                        </button>
+                    </div>
+
+                    <!-- Panel oubli de mot de passe -->
+                    <div
+                        id="forgot-panel"
+                        style="
+                            display: none;
+                            margin-top: 15px;
+                            padding: 15px;
+                            background: #f9f9f9;
+                            border-radius: 8px;
+                            border: 1px solid #ddd;
+                        "
+                    >
+                        <p
+                            style="
+                                margin: 0 0 8px 0;
+                                font-size: 13px;
+                                color: #555;
+                            "
+                        >
+                            Entre ton pseudo pour recevoir un lien de
+                            réinitialisation.
+                        </p>
+                        <input
+                            type="text"
+                            id="forgot-pseudo"
+                            placeholder="Ton pseudo"
+                            maxlength="30"
+                            style="
+                                width: 90%;
+                                padding: 8px;
+                                border-radius: 5px;
+                                border: 1px solid #ccc;
+                                margin-bottom: 8px;
+                            "
+                        />
+                        <button
+                            onclick="doForgotPassword()"
+                            style="
+                                width: 100%;
+                                padding: 8px;
+                                background: #2196f3;
+                                color: white;
+                                border: none;
+                                border-radius: 5px;
+                                cursor: pointer;
+                                font-weight: bold;
+                            "
+                        >
+                            Envoyer le lien
+                        </button>
+                        <div
+                            id="forgot-msg"
+                            style="
+                                margin-top: 8px;
+                                font-size: 12px;
+                                min-height: 16px;
+                            "
+                        ></div>
+                    </div>
+                </div>
+
                 <div id="form-register" style="display: none">
                     <input
                         type="text"
@@ -1385,25 +1563,9 @@
                     Bienvenue
                     <span id="lobby-pseudo" style="color: #2196f3"></span>
                 </h2>
-                <button class="lobby-btn btn-play" onclick="showRoomSelector()">
+                <button class="lobby-btn btn-play" onclick="openPlayPanel()">
                     🎮 JOUER
                 </button>
-                <div id="room-selector" style="display: none">
-                    <div
-                        style="font-size: 13px; color: #555; margin-bottom: 5px"
-                    >
-                        Choisir une arène :
-                    </div>
-                    <button class="room-btn" onclick="enterGame('Arène 1')">
-                        ⚔️ Arène 1 <span class="room-count" id="rc-0"></span>
-                    </button>
-                    <button class="room-btn" onclick="enterGame('Arène 2')">
-                        🏟️ Arène 2 <span class="room-count" id="rc-1"></span>
-                    </button>
-                    <button class="room-btn" onclick="enterGame('Arène 3')">
-                        🌋 Arène 3 <span class="room-count" id="rc-2"></span>
-                    </button>
-                </div>
 
                 <button class="lobby-btn btn-stats" onclick="openStats()">
                     🏆 STATISTIQUES
@@ -1432,6 +1594,18 @@
                     onclick="openSkinEditor()"
                 >
                     🎨 CRÉER UN SKIN
+                </button>
+
+                <button
+                    id="btn-settings"
+                    class="lobby-btn"
+                    style="
+                        background: linear-gradient(135deg, #4b5563, #334155);
+                        font-size: 14px;
+                    "
+                    onclick="openSettingsPanel()"
+                >
+                    ⚙️ PARAMÈTRES
                 </button>
                 <button class="lobby-btn btn-logout" onclick="doLogout()">
                     Se déconnecter
@@ -2091,9 +2265,9 @@
                         <button
                             onclick="closeShop()"
                             style="
-                                background: none;
-                                border: 1px solid #ffffff33;
-                                color: white;
+                                background: #eee;
+                                border: 1px solid #ccc;
+                                color: #333;
                                 padding: 6px 14px;
                                 border-radius: 8px;
                                 cursor: pointer;
@@ -2157,9 +2331,9 @@
                     <button
                         onclick="closeSkinEditor()"
                         style="
-                            background: none;
-                            border: 1px solid #ffffff33;
-                            color: white;
+                            background: #eee;
+                            border: 1px solid #ccc;
+                            color: #333;
                             padding: 6px 14px;
                             border-radius: 8px;
                             cursor: pointer;
@@ -2306,7 +2480,7 @@
                         <div id="etab-submissions" style="display: none">
                             <div
                                 id="my-submissions-list"
-                                style="color: #aaa; font-size: 13px"
+                                style="color: #555; font-size: 13px"
                             >
                                 Chargement...
                             </div>
@@ -2317,70 +2491,71 @@
                             id="etab-guide"
                             style="
                                 display: none;
-                                color: #ccc;
+                                color: #555;
                                 font-size: 13px;
                                 line-height: 1.8;
                             "
                         >
-                            <h3 style="color: #00d4ff; font-size: 14px">
+                            <h3 style="color: #333; font-size: 14px">
                                 📖 Comment créer un skin ?
                             </h3>
                             <p>
                                 Le cube fait
-                                <strong style="color: white">50×50px</strong>.
+                                <strong style="color: #222">50×50px</strong>.
                                 Utilise
-                                <code style="color: #00d4ff"
+                                <code style="color: #2196f3"
                                     >.skin-preview</code
                                 >
                                 comme sélecteur principal.
                             </p>
                             <p>
-                                <strong style="color: white"
+                                <strong style="color: #222"
                                     >Propriétés utiles :</strong
                                 >
                             </p>
                             <ul style="padding-left: 16px">
                                 <li>
-                                    <code style="color: #ffd700"
+                                    <code style="color: #1565c0"
                                         >background</code
                                     >
                                     — couleur, gradient, image
                                 </li>
                                 <li>
-                                    <code style="color: #ffd700">border</code> —
+                                    <code style="color: #1565c0">border</code> —
                                     bordure colorée
                                 </li>
                                 <li>
-                                    <code style="color: #ffd700"
+                                    <code style="color: #1565c0"
                                         >box-shadow</code
                                     >
                                     — lueur externe
                                 </li>
                                 <li>
-                                    <code style="color: #ffd700"
+                                    <code style="color: #1565c0"
                                         >animation</code
                                     >
                                     — mouvement, clignotement
                                 </li>
                                 <li>
-                                    <code style="color: #ffd700">filter</code> —
+                                    <code style="color: #1565c0">filter</code> —
                                     brightness, hue-rotate, blur
                                 </li>
                                 <li>
-                                    <code style="color: #ffd700"
+                                    <code style="color: #1565c0"
                                         >border-radius</code
                                     >
                                     — arrondir les coins
                                 </li>
                             </ul>
                             <p>
-                                <strong style="color: white"
+                                <strong style="color: #222"
                                     >Exemple animé :</strong
                                 >
                             </p>
                             <pre
                                 style="
-                                    background: #0d1117;
+                                    background: #f2f2f2;
+                                    border: 1px solid #ddd;
                                     padding: 10px;
                                     border-radius: 6px;
                                     font-size: 11px;
@@ -2425,8 +2600,9 @@
                             >
                             <div
                                 style="
-                                    background: #1a1a2e;
+                                    background: #eceff3;
                                     border-radius: 8px;
+                                    border: 1px solid #ddd;
                                     padding: 16px;
                                     position: relative;
                                     height: 80px;
@@ -2441,8 +2617,7 @@
                                         width: 50px;
                                         height: 50px;
                                         border-radius: 4px;
-                                        border: 2px solid
-                                            rgba(255, 255, 255, 0.5);
+                                        border: 2px solid #bbb;
                                         position: relative;
                                         overflow: hidden;
                                     "
@@ -2468,6 +2643,99 @@
                                 text-align: center;
                             "
                         ></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="play-panel">
+                <div class="menu-panel-header">
+                    <h2>🎮 CHOIX DE L'ARÈNE</h2>
+                    <button class="menu-close-btn" onclick="closePlayPanel()">
+                        ✕ Fermer
+                    </button>
+                </div>
+                <div class="menu-panel-body">
+                    <div class="play-subtitle">
+                        Choisis ton arène et lance la partie.
+                    </div>
+                    <div id="room-selector">
+                        <button class="room-btn" onclick="enterGame('Arène 1')">
+                            ⚔️ Arène 1
+                            <span class="room-count" id="rc-0"></span>
+                        </button>
+                        <button class="room-btn" onclick="enterGame('Arène 2')">
+                            🏟️ Arène 2
+                            <span class="room-count" id="rc-1"></span>
+                        </button>
+                        <button class="room-btn" onclick="enterGame('Arène 3')">
+                            🌋 Arène 3
+                            <span class="room-count" id="rc-2"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="settings-panel">
+                <div class="menu-panel-header">
+                    <h2>⚙️ PARAMÈTRES</h2>
+                    <button
+                        class="menu-close-btn"
+                        onclick="closeSettingsPanel()"
+                    >
+                        ✕ Fermer
+                    </button>
+                </div>
+                <div class="menu-panel-body">
+                    <div class="settings-grid">
+                        <div class="settings-card">
+                            <div class="settings-card-title">
+                                INFOS DU COMPTE
+                            </div>
+                            <div class="settings-line">
+                                <strong>Pseudo :</strong>
+                                <span id="settings-pseudo">-</span>
+                            </div>
+                            <div class="settings-line">
+                                <strong>Statut :</strong>
+                                <span id="settings-status">Compte</span>
+                            </div>
+                            <div class="settings-line">
+                                <strong>Créé le :</strong>
+                                <span id="settings-created-at">-</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-card">
+                            <div class="settings-card-title">
+                                EMAIL DE RÉCUPÉRATION
+                            </div>
+                            <input
+                                id="settings-email"
+                                type="email"
+                                class="settings-input"
+                                placeholder="exemple@email.com"
+                            />
+                            <button
+                                class="lobby-btn"
+                                style="
+                                    background: #2196f3;
+                                    margin-bottom: 0;
+                                    padding: 11px;
+                                "
+                                onclick="saveSettingsEmail()"
+                            >
+                                💾 Enregistrer l'email
+                            </button>
+                            <div
+                                id="settings-msg"
+                                style="
+                                    font-size: 12px;
+                                    min-height: 16px;
+                                    margin-top: 8px;
+                                    color: #555;
+                                "
+                            ></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2568,6 +2836,11 @@
                     type === "login" ? "block" : "none";
                 document.getElementById("form-register").style.display =
                     type === "register" ? "block" : "none";
+                document.getElementById("login-extra").style.display =
+                    type === "login" ? "block" : "none";
+                if (type !== "login")
+                    document.getElementById("forgot-panel").style.display =
+                        "none";
                 document.getElementById("tab-login").style.borderBottom =
                     type === "login" ? "3px solid #4CAF50" : "none";
                 document.getElementById("tab-login").style.color =
@@ -2676,6 +2949,12 @@
                 document.getElementById("lobby-panel").style.display = "block";
                 document.getElementById("game-layer").classList.add("blurred");
                 document.getElementById("lobby-pseudo").innerText = pseudo;
+                const settingsBtn = document.getElementById("btn-settings");
+                if (settingsBtn)
+                    settingsBtn.style.display =
+                        pseudo === "Invité" ? "none" : "block";
+                closeSettingsPanel();
+                closePlayPanel();
                 document.getElementById("afk-msg").style.display = "none";
                 document.getElementById("toggle-btn").style.display = "none";
                 document.getElementById("btn-leave").style.display = "none";
@@ -2732,13 +3011,28 @@
             }
 
             function showRoomSelector() {
-                const sel = document.getElementById("room-selector");
-                sel.style.display =
-                    sel.style.display === "none" ? "flex" : "none";
+                openPlayPanel();
+            }
+
+            function openPlayPanel() {
+                document.getElementById("lobby-panel").style.display = "none";
+                document.getElementById("play-panel").classList.add("active");
+            }
+
+            function closePlayPanel() {
+                const playPanel = document.getElementById("play-panel");
+                if (playPanel) playPanel.classList.remove("active");
+                document.getElementById("lobby-panel").style.display = "block";
             }
 
             function enterGame(roomName) {
                 currentRoom = roomName;
+                document
+                    .getElementById("play-panel")
+                    .classList.remove("active");
+                document
+                    .getElementById("settings-panel")
+                    .classList.remove("active");
                 document.getElementById("menu-overlay").classList.add("hidden");
                 document
                     .getElementById("game-layer")
@@ -4879,6 +5173,161 @@
             let lastFrameTime = performance.now();
             initFxCanvas();
             requestAnimationFrame(animate);
+
+            function showForgotPassword() {
+                const panel = document.getElementById("forgot-panel");
+                panel.style.display =
+                    panel.style.display === "none" ? "block" : "none";
+            }
+
+            async function doForgotPassword() {
+                const pseudo = document
+                    .getElementById("forgot-pseudo")
+                    .value.trim();
+                const msgEl = document.getElementById("forgot-msg");
+                if (!pseudo) {
+                    msgEl.style.color = "orange";
+                    msgEl.innerText = "Entre ton pseudo.";
+                    return;
+                }
+                msgEl.style.color = "#555";
+                msgEl.innerText = "Envoi...";
+                try {
+                    await fetch("/api/forgot-password", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ pseudo }),
+                    });
+                    // Toujours afficher OK pour ne pas révéler si le compte existe
+                    msgEl.style.color = "green";
+                    msgEl.innerText =
+                        "✅ Si ce pseudo a un email associé, tu recevras un lien.";
+                } catch (e) {
+                    msgEl.style.color = "red";
+                    msgEl.innerText = "Erreur réseau.";
+                }
+            }
+
+            function closeSettingsPanel() {
+                const panel = document.getElementById("settings-panel");
+                if (!panel) return;
+                panel.classList.remove("active");
+                document.getElementById("lobby-panel").style.display = "block";
+                const msg = document.getElementById("settings-msg");
+                if (msg) msg.innerText = "";
+            }
+
+            function formatDateSafe(input) {
+                if (!input) return "-";
+                const date = new Date(input);
+                if (Number.isNaN(date.getTime())) return "-";
+                return date.toLocaleDateString("fr-FR");
+            }
+
+            async function openSettingsPanel() {
+                if (!currentUserPseudo || currentUserPseudo === "Invité")
+                    return;
+
+                const panel = document.getElementById("settings-panel");
+                const msg = document.getElementById("settings-msg");
+                const pseudoEl = document.getElementById("settings-pseudo");
+                const statusEl = document.getElementById("settings-status");
+                const createdAtEl = document.getElementById(
+                    "settings-created-at",
+                );
+                const emailInput = document.getElementById("settings-email");
+
+                document.getElementById("lobby-panel").style.display = "none";
+                panel.classList.add("active");
+
+                msg.style.color = "#555";
+                msg.innerText = "Chargement...";
+                pseudoEl.innerText = currentUserPseudo;
+                statusEl.innerText = "Compte";
+                createdAtEl.innerText = "-";
+                emailInput.value = "";
+
+                const token = localStorage.getItem("cube_token");
+                if (!token) {
+                    msg.style.color = "red";
+                    msg.innerText = "Session expirée.";
+                    return;
+                }
+
+                try {
+                    const res = await fetch("/api/me", {
+                        headers: { Authorization: "Bearer " + token },
+                    });
+                    const data = await res.json();
+                    if (!data.success)
+                        throw new Error("Impossible de charger les infos.");
+
+                    const stats = data.stats || {};
+                    pseudoEl.innerText = data.pseudo || currentUserPseudo;
+                    createdAtEl.innerText = formatDateSafe(stats.createdAt);
+                    if (stats.email) emailInput.value = stats.email;
+
+                    msg.style.color = "#1b5e20";
+                    msg.innerText = "Tu peux modifier ton email ici.";
+                } catch (e) {
+                    msg.style.color = "red";
+                    msg.innerText = "Erreur lors du chargement des paramètres.";
+                }
+            }
+
+            async function saveSettingsEmail() {
+                const emailInput = document.getElementById("settings-email");
+                const msg = document.getElementById("settings-msg");
+                const email = (emailInput.value || "").trim();
+
+                if (!email) {
+                    msg.style.color = "orange";
+                    msg.innerText = "Entre un email.";
+                    return;
+                }
+
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    msg.style.color = "red";
+                    msg.innerText = "Email invalide.";
+                    return;
+                }
+
+                const token = localStorage.getItem("cube_token");
+                if (!token) {
+                    msg.style.color = "red";
+                    msg.innerText = "Session expirée.";
+                    return;
+                }
+
+                msg.style.color = "#555";
+                msg.innerText = "Enregistrement...";
+
+                try {
+                    const res = await fetch("/api/set-email", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: "Bearer " + token,
+                        },
+                        body: JSON.stringify({ email }),
+                    });
+                    const data = await res.json();
+                    if (!data.success)
+                        throw new Error(
+                            data.message || "Erreur d'enregistrement.",
+                        );
+
+                    msg.style.color = "green";
+                    msg.innerText = "✅ Email enregistré !";
+                } catch (e) {
+                    msg.style.color = "red";
+                    msg.innerText = "❌ " + (e.message || "Erreur.");
+                }
+            }
+
+            async function openEmailSettings() {
+                return openSettingsPanel();
+            }
         </script>
 
         <script src="https://storage.ko-fi.com/cdn/scripts/overlay-widget.js"></script>
